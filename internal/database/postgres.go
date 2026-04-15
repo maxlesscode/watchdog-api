@@ -3,7 +3,7 @@ package database
 import (
 	"database/sql"
 	"fmt"
-	"log"
+	"log/slog"
 	"os"
 
 	"github.com/joho/godotenv"
@@ -23,7 +23,7 @@ func configDB() Config {
 
 	err := godotenv.Load()
 	if err != nil {
-		log.Fatal("Can't load .env file")
+		slog.Error("failed to load .env", "err", err)
 	}
 
 	newConfig.host = os.Getenv("DB_HOST")
@@ -43,16 +43,16 @@ func StartDB() *sql.DB {
 
 	db, err := sql.Open("postgres", sqlInfo)
 	if err != nil {
-		log.Fatal("Can't open DB: ", err)
+		slog.Error("failed to open db", "err", err)
 	}
 
 	if err = db.Ping(); err != nil {
-		log.Fatal("DB not alive: ", err)
+		slog.Error("failed to ping db", "err", err)
 	}
 
 	_, err = db.Exec("CREATE TABLE IF NOT EXISTS products (id SERIAL, name TEXT, url TEXT, actual_price NUMERIC, target_price NUMERIC)")
 	if err != nil {
-		log.Fatal("Can't create main table in DB: ", err)
+		slog.Error("failed to create main table", "err", err)
 	}
 
 	return db

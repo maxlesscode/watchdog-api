@@ -1,8 +1,6 @@
 package main
 
 import (
-	"fmt"
-	"log"
 	"log/slog"
 	"net/http"
 
@@ -24,7 +22,7 @@ func main() {
 
 	logger, cleanup, err := logger.New("watchdog.log", slog.LevelInfo, isDev)
 	if err != nil {
-		log.Fatal("Can't load logger - ", err)
+		slog.Error("Can't load logger", "err", err)
 	}
 	defer cleanup()
 	slog.SetDefault(logger)
@@ -35,6 +33,6 @@ func main() {
 	http.HandleFunc("PATCH /products/{id}", env.UpdateProduct)
 	http.HandleFunc("DELETE /products/{id}", env.DeleteProduct)
 
-	fmt.Println("HTTP Server up at 'localhost:9999'")
+	slog.Info("HTTP Server started")
 	http.ListenAndServe(":9999", nil)
 }
