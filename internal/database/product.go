@@ -37,13 +37,16 @@ func GetProductByID(db *sql.DB, id int) (models.Product, error) {
 	return product, nil
 }
 
-func AddProduct(db *sql.DB, p models.Product) int {
+func AddProduct(db *sql.DB, p models.Product) (int, error) {
 	var retrunedId int
 	query := "INSERT INTO products(name, url, actual_price, target_price) VALUES ($1, $2, $3, $4) RETURNING id"
 
-	_ = db.QueryRow(query, p.Name, p.URL, p.ActualPrice, p.TargetPrice).Scan(&retrunedId)
+	err := db.QueryRow(query, p.Name, p.URL, p.ActualPrice, p.TargetPrice).Scan(&retrunedId)
+	if err != nil {
+		return -1, err
+	}
 
-	return retrunedId
+	return retrunedId, nil
 }
 
 func UpdateProduct(db *sql.DB, id int, p models.Product) (models.Product, error) {

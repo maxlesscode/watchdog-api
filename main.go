@@ -29,9 +29,9 @@ func main() {
 	defer cleanup()
 	slog.SetDefault(logger)
 
-	http.HandleFunc("GET /products", env.ProductsHandler)
+	http.HandleFunc("GET /products", env.GetAllProducts)
 	http.HandleFunc("GET /products/{id}", env.GetProductByID)
-	http.HandleFunc("POST /products", env.CreateProductHandler)
+	http.HandleFunc("POST /products", env.CreateProduct)
 	http.HandleFunc("PATCH /products/{id}", env.UpdateProduct)
 	http.HandleFunc("DELETE /products/{id}", env.DeleteProduct)
 
