@@ -2,11 +2,18 @@ package main
 
 import (
 	"fmt"
+	"log"
+	"log/slog"
 	"net/http"
 
 	_ "github.com/lib/pq"
 	"github.com/maxlesscode/watchdog/internal/database"
 	"github.com/maxlesscode/watchdog/internal/handlers"
+	"github.com/maxlesscode/watchdog/internal/logger"
+)
+
+const (
+	isDev = true
 )
 
 func main() {
@@ -14,6 +21,13 @@ func main() {
 	defer database.Close()
 
 	env := &handlers.Env{Db: database}
+
+	logger, cleanup, err := logger.New("watchdog.log", slog.LevelInfo, isDev)
+	if err != nil {
+		log.Fatal("Can't load logger - ", err)
+	}
+	defer cleanup()
+	slog.SetDefault(logger)
 
 	http.HandleFunc("GET /products", env.ProductsHandler)
 	http.HandleFunc("GET /products/{id}", env.GetProductByID)

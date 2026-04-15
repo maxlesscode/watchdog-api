@@ -4,10 +4,12 @@ import (
 	"database/sql"
 	"encoding/json"
 	"log"
+	"log/slog"
 	"net/http"
 	"strconv"
 
 	"github.com/maxlesscode/watchdog/internal/database"
+	"github.com/maxlesscode/watchdog/internal/errors"
 	"github.com/maxlesscode/watchdog/internal/models"
 )
 
@@ -16,10 +18,14 @@ type Env struct {
 }
 
 func (e *Env) ProductsHandler(w http.ResponseWriter, r *http.Request) {
+	slog.Info("request received", "method", "GET", "path", "/products")
 	allProducts, err := database.GetAllProducts(e.Db)
 	if err != nil {
-		log.Println("Can't get products list: ", err)
-		http.Error(w, "Can't get products list", http.StatusInternalServerError)
+		slog.Error("failed to fetch products", "err", err)
+		errors.SendError(w, http.StatusInternalServerError, errors.APIError{
+			Message: "failed to fetch products",
+			Code:    errors.CodeDatabaseError,
+		})
 		return
 	}
 
