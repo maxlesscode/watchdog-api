@@ -3,6 +3,7 @@ package database
 import (
 	"database/sql"
 	"fmt"
+	"log"
 	"log/slog"
 	"os"
 
@@ -47,7 +48,7 @@ func StartDB() *sql.DB {
 	}
 
 	if err = db.Ping(); err != nil {
-		slog.Error("failed to ping db", "err", err)
+		log.Fatal("database not alive")
 	}
 
 	_, err = db.Exec("CREATE TABLE IF NOT EXISTS products (id SERIAL, name TEXT, url TEXT, actual_price NUMERIC, target_price NUMERIC)")

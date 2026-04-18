@@ -1,11 +1,13 @@
 package handlers
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"log/slog"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/maxlesscode/watchdog/internal/database"
 	"github.com/maxlesscode/watchdog/internal/errors"
@@ -68,6 +70,7 @@ func (e *Env) CreateProduct(w http.ResponseWriter, r *http.Request) {
 	slog.Info("product created", "id", newProductID)
 
 	w.WriteHeader(http.StatusCreated)
+	json.NewEncoder(w).Encode(newProduct)
 }
 
 func (e *Env) GetProductByID(w http.ResponseWriter, r *http.Request) {
@@ -85,11 +88,18 @@ func (e *Env) GetProductByID(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	product, err := database.GetProductByID(e.Db, productID)
-	if err != nil {
-		slog.Error("failed to get product", "err", err)
+	if err == sql.ErrNoRows {
+		slog.Error("no product with id", "err", err)
 		errors.SendError(w, http.StatusNotFound, errors.APIError{
-			Message: "wrong id requested",
+			Message: "no product with id",
 			Code:    errors.CodeNotFound,
+		})
+		return
+	} else if err != nil {
+		slog.Error("failed to get product", "err", err)
+		errors.SendError(w, http.StatusInternalServerError, errors.APIError{
+			Message: "failed to get product",
+			Code:    errors.CodeInternalError,
 		})
 		return
 	}
@@ -179,4 +189,32 @@ func (e *Env) DeleteProduct(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.WriteHeader(http.StatusNoContent)
+}
+
+func (e *Env) HealthCheck(w http.ResponseWriter, r *http.Request) {
+	defer r.Body.Close()
+
+	ctx, cancel := context.WithTimeout(r.Context(), 1*time.Second)
+	defer cancel()
+
+	err := e.Db.PingContext(ctx)
+
+	response := map[string]string{
+		"status": "up",
+		"time":   time.Now().Format(time.RFC3339),
+	}
+
+	if err != nil {
+		response["status"] = "down"
+		response["database"] = "unreachable"
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusServiceUnavailable)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(response)
 }

@@ -1,0 +1,26 @@
+time=2026-04-16T07:41:06.237+02:00 level=INFO msg="HTTP Server started"
+time=2026-04-16T07:41:27.658+02:00 level=INFO msg="HTTP Server started"
+time=2026-04-16T07:41:30.914+02:00 level=INFO msg="request received" method=GET path=/products/{id}
+time=2026-04-16T07:41:30.932+02:00 level=ERROR msg="failed to get product" err="sql: no rows in result set"
+time=2026-04-16T07:41:35.707+02:00 level=INFO msg="request received" method=GET path=/products/{id}
+time=2026-04-17T07:41:20.218+02:00 level=INFO msg="HTTP Server started"
+time=2026-04-17T07:41:23.439+02:00 level=INFO msg="request received" method=GET path=/products/{id}
+time=2026-04-17T07:41:23.447+02:00 level=ERROR msg="failed to get product" err=<nil>
+time=2026-04-17T07:41:43.018+02:00 level=INFO msg="request received" method=GET path=/products/{id}
+time=2026-04-17T07:41:43.019+02:00 level=ERROR msg="no product with id" err="sql: no rows in result set"
+time=2026-04-17T07:41:56.225+02:00 level=INFO msg="request received" method=GET path=/products/{id}
+time=2026-04-17T07:41:56.227+02:00 level=ERROR msg="failed to get product" err=<nil>
+time=2026-04-17T07:42:39.035+02:00 level=INFO msg="HTTP Server started"
+time=2026-04-17T07:42:42.501+02:00 level=INFO msg="request received" method=GET path=/products/{id}
+time=2026-04-17T07:42:42.516+02:00 level=ERROR msg="failed to get product" err=<nil>
+time=2026-04-17T07:44:40.338+02:00 level=INFO msg="HTTP Server started"
+time=2026-04-17T07:44:43.104+02:00 level=INFO msg="request received" method=GET path=/products/{id}
+time=2026-04-17T07:44:47.326+02:00 level=INFO msg="request received" method=GET path=/products/{id}
+time=2026-04-17T07:44:47.327+02:00 level=ERROR msg="no product with id" err="sql: no rows in result set"
+time=2026-04-17T07:44:52.225+02:00 level=INFO msg="request received" method=GET path=/products/{id}
+time=2026-04-17T07:47:07.867+02:00 level=INFO msg="request received" method=POST path=/products
+time=2026-04-17T07:47:07.878+02:00 level=INFO msg="product created" id=12
+time=2026-04-17T07:47:13.405+02:00 level=INFO msg="HTTP Server started"
+time=2026-04-17T07:47:18.099+02:00 level=INFO msg="request received" method=POST path=/products
+time=2026-04-17T07:47:18.103+02:00 level=INFO msg="product created" id=13
+time=2026-04-18T12:38:56.495+02:00 level=INFO msg="HTTP Server started"
