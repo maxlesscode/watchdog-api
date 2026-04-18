@@ -27,8 +27,18 @@ type APIError struct {
 	Details map[string]string `json:"details,omitempty"`
 }
 
-func SendError(w http.ResponseWriter, code int, err APIError) {
+func SendError(w http.ResponseWriter, code int, tech_code string, message string, details ...map[string]string) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(code)
-	json.NewEncoder(w).Encode(err)
+
+	payload := APIError{
+		Message: message,
+		Code:    tech_code,
+	}
+
+	if len(details) > 0 {
+		payload.Details = details[0]
+	}
+
+	json.NewEncoder(w).Encode(map[string]APIError{"error": payload})
 }
