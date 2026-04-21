@@ -19,8 +19,6 @@ type Env struct {
 }
 
 func (e *Env) GetAllProducts(w http.ResponseWriter, r *http.Request) {
-	slog.Info("request received", "method", "GET", "path", "/products")
-
 	defer r.Body.Close()
 
 	allProducts, err := database.GetAllProducts(e.Db)
@@ -39,13 +37,12 @@ func (e *Env) GetAllProducts(w http.ResponseWriter, r *http.Request) {
 }
 
 func (e *Env) CreateProduct(w http.ResponseWriter, r *http.Request) {
-	slog.Info("request received", "method", "POST", "path", "/products")
-
 	defer r.Body.Close()
 
 	var newProduct models.Product
 	err := json.NewDecoder(r.Body).Decode(&newProduct)
 	details := database.ValidateProduct(newProduct)
+
 	if err != nil {
 		slog.Error("failed to decode request body", "err", err)
 		errors.SendError(w, http.StatusBadRequest, errors.CodeBadRequest, "invalid request body", details)
@@ -55,7 +52,7 @@ func (e *Env) CreateProduct(w http.ResponseWriter, r *http.Request) {
 	newProductID, err := database.AddProduct(e.Db, newProduct)
 	if err != nil {
 		slog.Error("failed to create product", "err", err)
-		errors.SendError(w, http.StatusInternalServerError, errors.CodeDatabaseError, "failed to create product", details)
+		errors.SendError(w, http.StatusInternalServerError, errors.CodeDatabaseError, "failed to create product")
 		return
 	}
 
@@ -67,8 +64,6 @@ func (e *Env) CreateProduct(w http.ResponseWriter, r *http.Request) {
 }
 
 func (e *Env) GetProductByID(w http.ResponseWriter, r *http.Request) {
-	slog.Info("request received", "method", "GET", "path", "/products/{id}")
-
 	defer r.Body.Close()
 
 	productID, err := strconv.Atoi(r.PathValue("id"))
@@ -99,8 +94,6 @@ func (e *Env) GetProductByID(w http.ResponseWriter, r *http.Request) {
 }
 
 func (e *Env) UpdateProduct(w http.ResponseWriter, r *http.Request) {
-	slog.Info("request received", "method", "PATCH", "path", "/products/{id}")
-
 	defer r.Body.Close()
 
 	var updatedProduct models.Product
@@ -138,8 +131,6 @@ func (e *Env) UpdateProduct(w http.ResponseWriter, r *http.Request) {
 }
 
 func (e *Env) DeleteProduct(w http.ResponseWriter, r *http.Request) {
-	slog.Info("request received", "method", "DELETE", "path", "/products/{id}")
-
 	defer r.Body.Close()
 
 	productID, err := strconv.Atoi(r.PathValue("id"))

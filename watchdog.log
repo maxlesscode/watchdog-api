@@ -24,3 +24,26 @@ time=2026-04-17T07:47:13.405+02:00 level=INFO msg="HTTP Server started"
 time=2026-04-17T07:47:18.099+02:00 level=INFO msg="request received" method=POST path=/products
 time=2026-04-17T07:47:18.103+02:00 level=INFO msg="product created" id=13
 time=2026-04-18T12:38:56.495+02:00 level=INFO msg="HTTP Server started"
+time=2026-04-20T07:52:42.828+02:00 level=INFO msg="HTTP Server started"
+time=2026-04-20T07:53:23.252+02:00 level=WARN msg="wrong api key"
+time=2026-04-20T07:54:05.669+02:00 level=INFO msg="request received" method=GET path=/products
+time=2026-04-21T07:18:23.166+02:00 level=INFO msg="HTTP Server started"
+time=2026-04-21T07:18:33.673+02:00 level=INFO msg=request method=GET path=/products status=200 duration=9.199261ms
+time=2026-04-21T07:18:38.659+02:00 level=INFO msg=request method=GET path=/products status=200 duration=725.357µs
+time=2026-04-21T07:18:39.130+02:00 level=INFO msg=request method=GET path=/products status=200 duration=1.220837ms
+time=2026-04-21T07:18:39.475+02:00 level=INFO msg=request method=GET path=/products status=200 duration=685.188µs
+time=2026-04-21T07:18:39.803+02:00 level=INFO msg=request method=GET path=/products status=200 duration=1.280486ms
+time=2026-04-21T07:18:51.782+02:00 level=ERROR msg="no product with id" err="sql: no rows in result set"
+time=2026-04-21T07:18:51.783+02:00 level=INFO msg=request method=GET path=/products/8 status=404 duration=8.206778ms
+time=2026-04-21T07:19:20.754+02:00 level=ERROR msg="no product with id" err="sql: no rows in result set"
+time=2026-04-21T07:19:20.755+02:00 level=INFO msg=request method=GET path=/products/8 status=404 duration=1.224053ms
+time=2026-04-21T07:19:35.370+02:00 level=WARN msg="wrong api key"
+time=2026-04-21T07:19:35.370+02:00 level=INFO msg=request method=POST path=/products status=401 duration=95.474µs
+time=2026-04-21T07:20:34.736+02:00 level=INFO msg="product created" id=14
+time=2026-04-21T07:20:34.736+02:00 level=INFO msg=request method=POST path=/products status=201 duration=7.298978ms
+time=2026-04-21T07:20:48.604+02:00 level=WARN msg="wrong api key"
+time=2026-04-21T07:20:48.604+02:00 level=INFO msg=request method=POST path=/products status=401 duration=108.756µs
+time=2026-04-21T07:20:59.545+02:00 level=WARN msg="wrong api key"
+time=2026-04-21T07:20:59.545+02:00 level=INFO msg=request method=POST path=/products status=401 duration=97.484µs
+time=2026-04-21T07:21:19.036+02:00 level=INFO msg="product created" id=15
+time=2026-04-21T07:21:19.037+02:00 level=INFO msg=request method=POST path=/products status=201 duration=3.215468ms

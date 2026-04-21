@@ -9,6 +9,7 @@ import (
 	"github.com/maxlesscode/watchdog/internal/database"
 	"github.com/maxlesscode/watchdog/internal/handlers"
 	"github.com/maxlesscode/watchdog/internal/logger"
+	m "github.com/maxlesscode/watchdog/internal/middleware"
 )
 
 const (
@@ -23,7 +24,7 @@ func main() {
 
 	srv := http.Server{
 		Addr:         ":9999",
-		Handler:      mux,
+		Handler:      m.LoggingMiddleware(m.APIKeyMiddleware(mux)),
 		ReadTimeout:  5 * time.Second,
 		WriteTimeout: 10 * time.Second,
 		IdleTimeout:  90 * time.Second,
