@@ -17,8 +17,8 @@ const (
 )
 
 func main() {
-	database := database.StartDB()
-	defer database.Close()
+	db := database.StartDB()
+	defer db.Close()
 
 	mux := http.NewServeMux()
 
@@ -30,7 +30,8 @@ func main() {
 		IdleTimeout:  90 * time.Second,
 	}
 
-	env := &handlers.Env{Db: database}
+	store := &database.PostgresStore{}
+	env := &handlers.Env{DB: store}
 
 	logger, cleanup, err := logger.New("watchdog.log", slog.LevelInfo, isDev)
 	if err != nil {

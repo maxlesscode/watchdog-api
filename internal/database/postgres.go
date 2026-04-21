@@ -19,6 +19,10 @@ type Config struct {
 	dbname   string
 }
 
+type PostgresStore struct {
+	db *sql.DB
+}
+
 func configDB() Config {
 	var newConfig Config
 

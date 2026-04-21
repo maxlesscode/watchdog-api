@@ -15,13 +15,14 @@ import (
 )
 
 type Env struct {
-	Db *sql.DB
+	DB    database.ProductStore
+	rawdb *sql.DB
 }
 
 func (e *Env) GetAllProducts(w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
 
-	allProducts, err := database.GetAllProducts(e.Db)
+	allProducts, err := e.DB.GetAllProducts()
 	if err != nil {
 		slog.Error("failed to fetch products", "err", err)
 		errors.SendError(w, http.StatusInternalServerError, errors.CodeDatabaseError, "failed to fetch products")
@@ -49,7 +50,7 @@ func (e *Env) CreateProduct(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	newProductID, err := database.AddProduct(e.Db, newProduct)
+	newProductID, err := e.DB.AddProduct(newProduct)
 	if err != nil {
 		slog.Error("failed to create product", "err", err)
 		errors.SendError(w, http.StatusInternalServerError, errors.CodeDatabaseError, "failed to create product")
@@ -72,7 +73,7 @@ func (e *Env) GetProductByID(w http.ResponseWriter, r *http.Request) {
 		errors.SendError(w, http.StatusBadRequest, errors.CodeInvalidID, "failed to parse id")
 		return
 	}
-	product, err := database.GetProductByID(e.Db, productID)
+	product, err := e.DB.GetProductByID(productID)
 	if err == sql.ErrNoRows {
 		slog.Error("no product with id", "err", err)
 		errors.SendError(w, http.StatusNotFound, errors.CodeNotFound, "no product with id")
@@ -113,7 +114,7 @@ func (e *Env) UpdateProduct(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if updatedProduct, err = database.UpdateProduct(e.Db, productID, updatedProduct); err != nil {
+	if updatedProduct, err = e.DB.UpdateProduct(productID, updatedProduct); err != nil {
 		slog.Error("failed to update product", "err", err)
 		errors.SendError(w, http.StatusInternalServerError, errors.CodeInternalError, "failed to update product", details)
 		return
@@ -140,7 +141,7 @@ func (e *Env) DeleteProduct(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = database.DeleteProduct(e.Db, productID)
+	err = e.DB.DeleteProduct(productID)
 	if err != nil {
 		slog.Error("failed to delete product", "err", err)
 		errors.SendError(w, http.StatusInternalServerError, errors.CodeDatabaseError, "failed to delete product")
@@ -156,7 +157,7 @@ func (e *Env) HealthCheck(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 1*time.Second)
 	defer cancel()
 
-	err := e.Db.PingContext(ctx)
+	err := e.rawdb.PingContext(ctx)
 
 	response := map[string]string{
 		"status": "up",
