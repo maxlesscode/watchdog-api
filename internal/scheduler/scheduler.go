@@ -107,4 +107,20 @@ func (s *Scheduler) fetchAndStore(ctx context.Context, p models.Product) {
 	}
 
 	slog.Info("scheduler: price updated", "product_id", p.ID, "price", price)
+
+	p.ActualPrice = price
+	if price <= p.TargetPrice && s.notifier != nil &&
+		(p.LastAlertedAt == nil || p.LastAlertedAt.Before(now.Add(-24*time.Hour))) {
+		if err := s.notifier.Notify(ctx, p); err != nil {
+			slog.Error("scheduler: notify failed", "product_id", p.ID, "err", err)
+			return
+		}
+		if err := s.store.UpdateLastAlerted(ctx, database.UpdateLastAlertedInput{
+			ID:        p.ID,
+			AlertedAt: now,
+		}); err != nil {
+			slog.Error("scheduler: update last_alerted_at failed", "product_id", p.ID, "err", err)
+		}
+		slog.Info("scheduler: alert sent", "product_id", p.ID, "actual_price", price, "target_price", p.TargetPrice)
+	}
 }

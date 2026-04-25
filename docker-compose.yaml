@@ -14,3 +14,13 @@ services:
     restart: always
     ports:
       - 8080:8080
+
+  swagger-ui:
+    image: swaggerapi/swagger-ui
+    restart: always
+    ports:
+      - "8081:8080"
+    volumes:
+      - ./openapi.yaml:/tmp/openapi.yaml
+    environment:
+      SWAGGER_JSON: /tmp/openapi.yaml

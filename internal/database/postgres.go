@@ -82,6 +82,26 @@ func StartDB() *sql.DB {
 		log.Fatal("failed to add last_checked_at column: ", err)
 	}
 
+	_, err = db.Exec(`ALTER TABLE products ADD COLUMN IF NOT EXISTS last_alerted_at TIMESTAMPTZ`)
+	if err != nil {
+		log.Fatal("failed to add last_alerted_at column: ", err)
+	}
+
+	// Ensure products.id has a PRIMARY KEY — may be missing if table was created by an older schema.
+	_, err = db.Exec(`DO $$
+		BEGIN
+			IF NOT EXISTS (
+				SELECT 1 FROM pg_constraint
+				WHERE conrelid = 'products'::regclass AND contype = 'p'
+			) THEN
+				ALTER TABLE products ADD PRIMARY KEY (id);
+			END IF;
+		END;
+	$$`)
+	if err != nil {
+		log.Fatal("failed to ensure products primary key: ", err)
+	}
+
 	_, err = db.Exec(`CREATE TABLE IF NOT EXISTS price_history (
 		id         SERIAL PRIMARY KEY,
 		product_id INTEGER NOT NULL REFERENCES products(id) ON DELETE CASCADE,

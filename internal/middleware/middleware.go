@@ -35,6 +35,23 @@ func APIKeyMiddleware(next http.Handler) http.Handler {
 	})
 }
 
+// CORSMiddleware adds permissive CORS headers for local dev (Swagger UI).
+// Handles OPTIONS preflight so Swagger UI can reach the API from a different port.
+func CORSMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PATCH, DELETE, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Headers", "X-API-Key, Content-Type")
+
+		if r.Method == http.MethodOptions {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+
+		next.ServeHTTP(w, r)
+	})
+}
+
 func LoggingMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()

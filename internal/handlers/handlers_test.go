@@ -54,6 +54,10 @@ func (m *mockStore) InsertPriceHistory(_ context.Context, _ database.InsertPrice
 	return nil
 }
 
+func (m *mockStore) UpdateLastAlerted(_ context.Context, _ database.UpdateLastAlertedInput) error {
+	return nil
+}
+
 func TestGetAllProducts(t *testing.T) {
 	t.Parallel()
 

@@ -31,7 +31,7 @@ docker compose up -d
 go run cmd/watchdog/main.go
 ```
 
-Server starts on `:9999`. Adminer UI at `http://localhost:8080`.
+Server starts on `:9999`. Adminer UI at `http://localhost:8080`. Swagger UI at `http://localhost:8081`.
 
 ---
 

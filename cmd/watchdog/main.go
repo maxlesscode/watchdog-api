@@ -67,7 +67,7 @@ func main() {
 
 	srv := http.Server{
 		Addr:         ":9999",
-		Handler:      m.LoggingMiddleware(m.APIKeyMiddleware(mux)),
+		Handler:      m.CORSMiddleware(m.LoggingMiddleware(m.APIKeyMiddleware(mux))),
 		ReadTimeout:  5 * time.Second,
 		WriteTimeout: 10 * time.Second,
 		IdleTimeout:  90 * time.Second,

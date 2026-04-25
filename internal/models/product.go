@@ -10,4 +10,5 @@ type Product struct {
 	TargetPrice   float64    `json:"target_price"`
 	PriceSelector string     `json:"price_selector,omitempty"`
 	LastCheckedAt *time.Time `json:"last_checked_at,omitempty"`
+	LastAlertedAt *time.Time `json:"last_alerted_at,omitempty"`
 }

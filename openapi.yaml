@@ -1,0 +1,345 @@
+openapi: 3.0.3
+
+info:
+  title: Watchdog
+  version: 0.1.0
+  description: |
+    Price monitoring API. Add product URLs, set a target price — Watchdog polls
+    prices hourly and emails you when the price drops to your target.
+
+servers:
+  - url: http://localhost:9999
+    description: Local dev server
+
+security:
+  - ApiKeyAuth: []
+
+components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-Key
+
+  schemas:
+    Product:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+          example: 1
+        name:
+          type: string
+          example: Mechanical Keyboard
+        url:
+          type: string
+          format: uri
+          example: https://example.com/product/123
+        actual_price:
+          type: number
+          format: float
+          readOnly: true
+          example: 94.99
+        target_price:
+          type: number
+          format: float
+          minimum: 0
+          example: 89.99
+        price_selector:
+          type: string
+          description: CSS selector for price element. Omit to use schema.org JSON-LD heuristic.
+          example: .product-price
+        last_checked_at:
+          type: string
+          format: date-time
+          readOnly: true
+          example: "2025-01-01T12:00:00Z"
+
+    ProductInput:
+      type: object
+      required:
+        - name
+        - url
+        - target_price
+      properties:
+        name:
+          type: string
+          example: Mechanical Keyboard
+        url:
+          type: string
+          format: uri
+          example: https://example.com/product/123
+        target_price:
+          type: number
+          format: float
+          minimum: 0
+          example: 89.99
+        price_selector:
+          type: string
+          description: CSS selector for price element. Omit to use schema.org JSON-LD heuristic.
+          example: .product-price
+
+    Error:
+      type: object
+      properties:
+        error:
+          type: object
+          properties:
+            code:
+              type: string
+              enum:
+                - INTERNAL_SERVER_ERROR
+                - BAD_REQUEST
+                - RESOURCE_NOT_FOUND
+                - AUTH_REQUIRED
+                - AUTH_INVALID_TOKEN
+                - VALIDATION_FAILED
+                - INVALID_RESOURCE_ID
+                - DATABASE_ERROR
+              example: VALIDATION_FAILED
+            message:
+              type: string
+              example: validation failed
+            details:
+              type: object
+              additionalProperties:
+                type: string
+              example:
+                name: is required
+                url: is required
+
+    HealthResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [up, down]
+          example: up
+        time:
+          type: string
+          format: date-time
+          example: "2025-01-01T12:00:00Z"
+        database:
+          type: string
+          description: Present only when DB is unreachable.
+          example: unreachable
+
+    ScrapeResponse:
+      type: object
+      properties:
+        message:
+          type: string
+          example: scrape cycle started
+
+paths:
+  /health:
+    get:
+      summary: Liveness and DB reachability check
+      security: []
+      tags: [System]
+      responses:
+        "200":
+          description: Service is up and DB is reachable
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthResponse"
+        "503":
+          description: Service is up but DB is unreachable
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthResponse"
+
+  /products:
+    get:
+      summary: List all tracked products
+      tags: [Products]
+      responses:
+        "200":
+          description: Array of products (empty array if none)
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Product"
+        "500":
+          description: Database error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: Missing or invalid API key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+    post:
+      summary: Add a new product to track
+      tags: [Products]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProductInput"
+      responses:
+        "201":
+          description: Product created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Product"
+        "400":
+          description: Invalid JSON or validation failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "500":
+          description: Database error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: Missing or invalid API key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /products/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+        example: 1
+
+    get:
+      summary: Get a product by ID
+      tags: [Products]
+      responses:
+        "200":
+          description: Product found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Product"
+        "400":
+          description: ID is not a valid integer
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: Product not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "500":
+          description: Database error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: Missing or invalid API key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+    patch:
+      summary: Update a product
+      tags: [Products]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProductInput"
+      responses:
+        "200":
+          description: Product updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Product"
+        "400":
+          description: Invalid JSON, invalid ID, or validation failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "500":
+          description: Database error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: Missing or invalid API key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+    delete:
+      summary: Remove a product
+      tags: [Products]
+      responses:
+        "204":
+          description: Product deleted
+        "400":
+          description: ID is not a valid integer
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "500":
+          description: Database error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: Missing or invalid API key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /admin/scrape:
+    post:
+      summary: Trigger an immediate scrape cycle
+      description: |
+        Fires one full price-fetch pass over all tracked products asynchronously.
+        Returns 202 immediately — check logs for per-product results.
+      tags: [Admin]
+      responses:
+        "202":
+          description: Scrape cycle started
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ScrapeResponse"
+        "503":
+          description: Scraper not configured
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: Missing or invalid API key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
