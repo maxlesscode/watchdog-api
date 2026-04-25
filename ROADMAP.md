@@ -68,14 +68,14 @@ Fetch actual prices from product URLs. Core value loop.
 Alert user when price drops below target.
 
 ### 2.1 — Notifier interface
-- [ ] Define `Notifier` interface: `Notify(ctx context.Context, p models.Product) error`
-- [ ] Place in `internal/notifier/notifier.go`
+- [x] Define `Notifier` interface: `Notify(ctx context.Context, p models.Product) error`
+- [x] Place in `internal/notifier/notifier.go`
 
 ### 2.2 — Email notifier (SMTP)
-- [ ] Implement `SMTPNotifier` using `net/smtp` (stdlib, no extra dep)
-- [ ] Config from env: `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `ALERT_EMAIL`
-- [ ] Email body: product name, URL, current price, target price
-- [ ] Validate SMTP config on startup (CFG-1)
+- [x] Implement `SMTPNotifier` using `net/smtp` (stdlib, no extra dep)
+- [x] Config from env: `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `ALERT_EMAIL`
+- [x] Email body: product name, URL, current price, target price
+- [x] Validate SMTP config on startup (CFG-1)
 
 ### 2.3 — Alert check in scheduler
 - [ ] After price update: if `actual_price <= target_price` → call `Notifier.Notify`

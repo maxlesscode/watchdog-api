@@ -16,6 +16,7 @@ import (
 	"github.com/maxlesscode/watchdog/internal/handlers"
 	"github.com/maxlesscode/watchdog/internal/logger"
 	m "github.com/maxlesscode/watchdog/internal/middleware"
+	"github.com/maxlesscode/watchdog/internal/notifier"
 	"github.com/maxlesscode/watchdog/internal/scheduler"
 	"github.com/maxlesscode/watchdog/internal/scraper"
 )
@@ -41,11 +42,12 @@ func main() {
 	defer stop()
 
 	store := database.NewPostgresStore(db)
-
 	htmlScraper := scraper.NewHTMLScraper(&http.Client{Timeout: 5 * time.Second})
+
 	sched := scheduler.New(scheduler.Config{
-		Store:   store,
-		Scraper: htmlScraper,
+		Store:    store,
+		Scraper:  htmlScraper,
+		Notifier: loadNotifier(),
 	})
 	go sched.Run(ctx)
 
@@ -84,4 +86,23 @@ func main() {
 	if err = srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		slog.Error("server stopped", "err", err)
 	}
+}
+
+// loadNotifier returns an SMTPNotifier if SMTP_HOST is set, nil otherwise.
+func loadNotifier() notifier.Notifier {
+	cfg := notifier.SMTPConfig{
+		Host:       os.Getenv("SMTP_HOST"),
+		Port:       os.Getenv("SMTP_PORT"),
+		User:       os.Getenv("SMTP_USER"),
+		Pass:       os.Getenv("SMTP_PASS"),
+		AlertEmail: os.Getenv("ALERT_EMAIL"),
+	}
+	if cfg.Host == "" {
+		slog.Warn("SMTP_HOST not set — email notifications disabled")
+		return nil
+	}
+	if err := cfg.Validate(); err != nil {
+		log.Fatal(err)
+	}
+	return notifier.NewSMTPNotifier(cfg)
 }
