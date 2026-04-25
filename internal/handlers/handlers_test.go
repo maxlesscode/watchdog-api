@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/maxlesscode/watchdog/internal/database"
 	"github.com/maxlesscode/watchdog/internal/models"
 )
 
@@ -43,6 +44,14 @@ func (m *mockStore) DeleteProduct(ctx context.Context, id int) error {
 
 func (m *mockStore) Ping(ctx context.Context) error {
 	return m.pingFn(ctx)
+}
+
+func (m *mockStore) UpdateActualPrice(_ context.Context, _ database.UpdateActualPriceInput) error {
+	return nil
+}
+
+func (m *mockStore) InsertPriceHistory(_ context.Context, _ database.InsertPriceHistoryInput) error {
+	return nil
 }
 
 func TestGetAllProducts(t *testing.T) {

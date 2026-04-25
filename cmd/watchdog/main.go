@@ -1,10 +1,14 @@
 package main
 
 import (
+	"context"
+	"errors"
 	"log"
 	"log/slog"
 	"net/http"
 	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	_ "github.com/lib/pq"
@@ -12,6 +16,8 @@ import (
 	"github.com/maxlesscode/watchdog/internal/handlers"
 	"github.com/maxlesscode/watchdog/internal/logger"
 	m "github.com/maxlesscode/watchdog/internal/middleware"
+	"github.com/maxlesscode/watchdog/internal/scheduler"
+	"github.com/maxlesscode/watchdog/internal/scraper"
 )
 
 func main() {
@@ -30,17 +36,20 @@ func main() {
 	if os.Getenv("API_KEY") == "" {
 		log.Fatal("API_KEY must be set")
 	}
-	mux := http.NewServeMux()
 
-	srv := http.Server{
-		Addr:         ":9999",
-		Handler:      m.LoggingMiddleware(m.APIKeyMiddleware(mux)),
-		ReadTimeout:  5 * time.Second,
-		WriteTimeout: 10 * time.Second,
-		IdleTimeout:  90 * time.Second,
-	}
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
 
 	store := database.NewPostgresStore(db)
+
+	htmlScraper := scraper.NewHTMLScraper(&http.Client{Timeout: 5 * time.Second})
+	sched := scheduler.New(scheduler.Config{
+		Store:   store,
+		Scraper: htmlScraper,
+	})
+	go sched.Run(ctx)
+
+	mux := http.NewServeMux()
 	env := &handlers.Env{DB: store}
 
 	mux.HandleFunc("GET /products", env.GetAllProducts)
@@ -50,8 +59,25 @@ func main() {
 	mux.HandleFunc("DELETE /products/{id}", env.DeleteProduct)
 	mux.HandleFunc("GET /health", env.HealthCheck)
 
+	srv := http.Server{
+		Addr:         ":9999",
+		Handler:      m.LoggingMiddleware(m.APIKeyMiddleware(mux)),
+		ReadTimeout:  5 * time.Second,
+		WriteTimeout: 10 * time.Second,
+		IdleTimeout:  90 * time.Second,
+	}
+
+	go func() {
+		<-ctx.Done()
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		if err := srv.Shutdown(shutdownCtx); err != nil {
+			slog.Error("server shutdown error", "err", err)
+		}
+	}()
+
 	slog.Info("HTTP Server started")
-	if err = srv.ListenAndServe(); err != nil {
+	if err = srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		slog.Error("server stopped", "err", err)
 	}
 }

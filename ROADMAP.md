@@ -43,19 +43,19 @@ Fetch actual prices from product URLs. Core value loop.
 - [x] Unit tests with `httptest.NewServer` serving fixture HTML
 
 ### 1.3 — DB: price history + metadata
-- [ ] Add columns to `products` table: `last_checked_at TIMESTAMPTZ`, `price_selector TEXT`
-- [ ] Create `price_history` table: `id, product_id, price, checked_at`
-- [ ] Extend `ProductStore` interface: `UpdateActualPrice`, `InsertPriceHistory`
-- [ ] Implement both in `internal/database/product.go`
-- [ ] Auto-create `price_history` table in `StartDB`
+- [x] Add columns to `products` table: `last_checked_at TIMESTAMPTZ`, `price_selector TEXT`
+- [x] Create `price_history` table: `id, product_id, price, checked_at`
+- [x] Extend `ProductStore` interface: `UpdateActualPrice`, `InsertPriceHistory`
+- [x] Implement both in `internal/database/product.go`
+- [x] Auto-create `price_history` table in `StartDB`
 
 ### 1.4 — Hourly scheduler
-- [ ] Create `internal/scheduler/scheduler.go`
-- [ ] `Scheduler` struct holds `ProductStore`, `Scraper`, `Notifier` (Phase 2)
-- [ ] `Run(ctx context.Context)` — starts ticker, runs price-fetch loop every hour
-- [ ] Goroutine tied to `ctx` (CC-2); stops cleanly on `ctx.Done()`
-- [ ] Fan-out with `errgroup` over all products (CC-4); log per-product errors, don't abort loop
-- [ ] Wire into `main.go`: `go scheduler.Run(ctx)`
+- [x] Create `internal/scheduler/scheduler.go`
+- [x] `Scheduler` struct holds `ProductStore`, `Scraper`, `Notifier` (Phase 2)
+- [x] `Run(ctx context.Context)` — starts ticker, runs price-fetch loop every hour
+- [x] Goroutine tied to `ctx` (CC-2); stops cleanly on `ctx.Done()`
+- [x] Fan-out with `errgroup` over all products (CC-4); log per-product errors, don't abort loop
+- [x] Wire into `main.go`: `go scheduler.Run(ctx)`
 
 ### 1.5 — Manual trigger endpoint (debug/dev)
 - [ ] `POST /admin/scrape` — triggers one full scrape cycle immediately

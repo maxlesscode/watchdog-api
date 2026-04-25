@@ -72,5 +72,25 @@ func StartDB() *sql.DB {
 		log.Fatal("failed to create products table: ", err)
 	}
 
+	_, err = db.Exec(`ALTER TABLE products ADD COLUMN IF NOT EXISTS price_selector TEXT`)
+	if err != nil {
+		log.Fatal("failed to add price_selector column: ", err)
+	}
+
+	_, err = db.Exec(`ALTER TABLE products ADD COLUMN IF NOT EXISTS last_checked_at TIMESTAMPTZ`)
+	if err != nil {
+		log.Fatal("failed to add last_checked_at column: ", err)
+	}
+
+	_, err = db.Exec(`CREATE TABLE IF NOT EXISTS price_history (
+		id         SERIAL PRIMARY KEY,
+		product_id INTEGER NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+		price      NUMERIC NOT NULL,
+		checked_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+	)`)
+	if err != nil {
+		log.Fatal("failed to create price_history table: ", err)
+	}
+
 	return db
 }
