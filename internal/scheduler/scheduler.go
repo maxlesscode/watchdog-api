@@ -55,12 +55,13 @@ func (s *Scheduler) Run(ctx context.Context) {
 			slog.Info("scheduler stopped")
 			return
 		case <-ticker.C:
-			s.runCycle(ctx)
+			s.RunCycle(ctx)
 		}
 	}
 }
 
-func (s *Scheduler) runCycle(ctx context.Context) {
+// RunCycle executes one full price-fetch pass over all products.
+func (s *Scheduler) RunCycle(ctx context.Context) {
 	products, err := s.store.GetAllProducts(ctx)
 	if err != nil {
 		slog.Error("scheduler: fetch products failed", "err", err)

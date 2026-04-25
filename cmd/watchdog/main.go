@@ -50,7 +50,10 @@ func main() {
 	go sched.Run(ctx)
 
 	mux := http.NewServeMux()
-	env := &handlers.Env{DB: store}
+	env := &handlers.Env{
+		DB:            store,
+		TriggerScrape: sched.RunCycle,
+	}
 
 	mux.HandleFunc("GET /products", env.GetAllProducts)
 	mux.HandleFunc("GET /products/{id}", env.GetProductByID)
@@ -58,6 +61,7 @@ func main() {
 	mux.HandleFunc("PATCH /products/{id}", env.UpdateProduct)
 	mux.HandleFunc("DELETE /products/{id}", env.DeleteProduct)
 	mux.HandleFunc("GET /health", env.HealthCheck)
+	mux.HandleFunc("POST /admin/scrape", env.AdminScrape)
 
 	srv := http.Server{
 		Addr:         ":9999",

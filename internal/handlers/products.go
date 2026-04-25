@@ -19,7 +19,8 @@ import (
 const maxBodyBytes = 1 << 20 // 1 MB
 
 type Env struct {
-	DB database.ProductStore
+	DB            database.ProductStore
+	TriggerScrape func(ctx context.Context)
 }
 
 func (e *Env) GetAllProducts(w http.ResponseWriter, r *http.Request) {

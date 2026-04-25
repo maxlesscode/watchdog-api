@@ -58,8 +58,8 @@ Fetch actual prices from product URLs. Core value loop.
 - [x] Wire into `main.go`: `go scheduler.Run(ctx)`
 
 ### 1.5 — Manual trigger endpoint (debug/dev)
-- [ ] `POST /admin/scrape` — triggers one full scrape cycle immediately
-- [ ] Guard with API key (already covered by middleware)
+- [x] `POST /admin/scrape` — triggers one full scrape cycle immediately
+- [x] Guard with API key (already covered by middleware)
 
 ---
 
