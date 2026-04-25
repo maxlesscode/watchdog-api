@@ -2,6 +2,7 @@ package errors
 
 import (
 	"encoding/json"
+	"log/slog"
 	"net/http"
 )
 
@@ -27,18 +28,21 @@ type APIError struct {
 	Details map[string]string `json:"details,omitempty"`
 }
 
-func SendError(w http.ResponseWriter, code int, tech_code string, message string, details ...map[string]string) {
+func SendError(w http.ResponseWriter, code int, techCode string, message string, details ...map[string]string) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(code)
 
 	payload := APIError{
 		Message: message,
-		Code:    tech_code,
+		Code:    techCode,
 	}
 
 	if len(details) > 0 {
 		payload.Details = details[0]
 	}
 
-	json.NewEncoder(w).Encode(map[string]APIError{"error": payload})
+	err := json.NewEncoder(w).Encode(map[string]APIError{"error": payload})
+	if err != nil {
+		slog.Warn("failed to send json error body", "err", err)
+	}
 }

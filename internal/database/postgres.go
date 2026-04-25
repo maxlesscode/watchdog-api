@@ -4,7 +4,6 @@ import (
 	"database/sql"
 	"fmt"
 	"log"
-	"log/slog"
 	"os"
 
 	"github.com/joho/godotenv"
@@ -23,21 +22,28 @@ type PostgresStore struct {
 	db *sql.DB
 }
 
-func configDB() Config {
-	var newConfig Config
+func NewPostgresStore(db *sql.DB) *PostgresStore {
+	return &PostgresStore{db: db}
+}
 
-	err := godotenv.Load()
-	if err != nil {
-		slog.Error("failed to load .env", "err", err)
+func configDB() Config {
+	if err := godotenv.Load(); err != nil {
+		log.Println("no .env file, reading from environment")
 	}
 
-	newConfig.host = os.Getenv("DB_HOST")
-	newConfig.port = os.Getenv("DB_PORT")
-	newConfig.user = os.Getenv("DB_USER")
-	newConfig.password = os.Getenv("DB_PASSWORD")
-	newConfig.dbname = os.Getenv("DB_NAME")
+	cfg := Config{
+		host:     os.Getenv("DB_HOST"),
+		port:     os.Getenv("DB_PORT"),
+		user:     os.Getenv("DB_USER"),
+		password: os.Getenv("DB_PASSWORD"),
+		dbname:   os.Getenv("DB_NAME"),
+	}
 
-	return newConfig
+	if cfg.host == "" || cfg.port == "" || cfg.user == "" || cfg.dbname == "" {
+		log.Fatal("DB_HOST, DB_PORT, DB_USER, DB_NAME must be set")
+	}
+
+	return cfg
 }
 
 func StartDB() *sql.DB {
@@ -48,16 +54,22 @@ func StartDB() *sql.DB {
 
 	db, err := sql.Open("postgres", sqlInfo)
 	if err != nil {
-		slog.Error("failed to open db", "err", err)
+		log.Fatal("failed to open db: ", err)
 	}
 
 	if err = db.Ping(); err != nil {
-		log.Fatal("database not alive")
+		log.Fatal("database not alive: ", err)
 	}
 
-	_, err = db.Exec("CREATE TABLE IF NOT EXISTS products (id SERIAL, name TEXT, url TEXT, actual_price NUMERIC, target_price NUMERIC)")
+	_, err = db.Exec(`CREATE TABLE IF NOT EXISTS products (
+		id           SERIAL PRIMARY KEY,
+		name         TEXT NOT NULL,
+		url          TEXT NOT NULL,
+		actual_price NUMERIC,
+		target_price NUMERIC
+	)`)
 	if err != nil {
-		slog.Error("failed to create main table", "err", err)
+		log.Fatal("failed to create products table: ", err)
 	}
 
 	return db

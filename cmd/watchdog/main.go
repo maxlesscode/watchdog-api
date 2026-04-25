@@ -1,8 +1,10 @@
 package main
 
 import (
+	"log"
 	"log/slog"
 	"net/http"
+	"os"
 	"time"
 
 	_ "github.com/lib/pq"
@@ -12,14 +14,22 @@ import (
 	m "github.com/maxlesscode/watchdog/internal/middleware"
 )
 
-const (
-	isDev = true
-)
-
 func main() {
+	isDev := os.Getenv("IS_DEV")
+
+	appLogger, cleanup, err := logger.New("watchdog.log", slog.LevelInfo, isDev)
+	if err != nil {
+		log.Fatal("failed to initialize logger: ", err)
+	}
+	defer cleanup()
+	slog.SetDefault(appLogger)
+
 	db := database.StartDB()
 	defer db.Close()
 
+	if os.Getenv("API_KEY") == "" {
+		log.Fatal("API_KEY must be set")
+	}
 	mux := http.NewServeMux()
 
 	srv := http.Server{
@@ -30,15 +40,8 @@ func main() {
 		IdleTimeout:  90 * time.Second,
 	}
 
-	store := &database.PostgresStore{}
+	store := database.NewPostgresStore(db)
 	env := &handlers.Env{DB: store}
-
-	logger, cleanup, err := logger.New("watchdog.log", slog.LevelInfo, isDev)
-	if err != nil {
-		slog.Error("Can't load logger", "err", err)
-	}
-	defer cleanup()
-	slog.SetDefault(logger)
 
 	mux.HandleFunc("GET /products", env.GetAllProducts)
 	mux.HandleFunc("GET /products/{id}", env.GetProductByID)
@@ -48,5 +51,7 @@ func main() {
 	mux.HandleFunc("GET /health", env.HealthCheck)
 
 	slog.Info("HTTP Server started")
-	srv.ListenAndServe()
+	if err = srv.ListenAndServe(); err != nil {
+		slog.Error("server stopped", "err", err)
+	}
 }

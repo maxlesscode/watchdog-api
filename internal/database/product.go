@@ -1,98 +1,74 @@
 package database
 
 import (
+	"context"
+
 	"github.com/maxlesscode/watchdog/internal/models"
 )
 
 type ProductStore interface {
-	GetAllProducts() ([]models.Product, error)
-	GetProductByID(id int) (models.Product, error)
-	AddProduct(p models.Product) (int, error)
-	UpdateProduct(id int, p models.Product) (models.Product, error)
-	DeleteProduct(id int) error
+	GetAllProducts(ctx context.Context) ([]models.Product, error)
+	GetProductByID(ctx context.Context, id int) (models.Product, error)
+	AddProduct(ctx context.Context, p models.Product) (int, error)
+	UpdateProduct(ctx context.Context, id int, p models.Product) (models.Product, error)
+	DeleteProduct(ctx context.Context, id int) error
+	Ping(ctx context.Context) error
 }
 
-func (s *PostgresStore) GetAllProducts() ([]models.Product, error) {
-	products, err := s.db.Query("SELECT * FROM products")
+const selectColumns = "id, name, url, actual_price, target_price"
+
+func (s *PostgresStore) GetAllProducts(ctx context.Context) ([]models.Product, error) {
+	rows, err := s.db.QueryContext(ctx, "SELECT "+selectColumns+" FROM products")
 	if err != nil {
 		return nil, err
 	}
-	defer products.Close()
+	defer rows.Close()
 
-	var products_list []models.Product
-
-	for products.Next() {
-		var product models.Product
-		if err := products.Scan(&product.ID, &product.Name, &product.URL, &product.ActualPrice, &product.TargetPrice); err != nil {
-			return products_list, err
+	var productList []models.Product
+	for rows.Next() {
+		var p models.Product
+		if err := rows.Scan(&p.ID, &p.Name, &p.URL, &p.ActualPrice, &p.TargetPrice); err != nil {
+			return productList, err
 		}
-		products_list = append(products_list, product)
+		productList = append(productList, p)
 	}
 
-	return products_list, nil
+	return productList, rows.Err()
 }
 
-func (s *PostgresStore) GetProductByID(id int) (models.Product, error) {
-	var product models.Product
-
-	err := s.db.QueryRow("SELECT * FROM products WHERE id = $1", id).Scan(&product.ID, &product.Name, &product.URL, &product.ActualPrice, &product.TargetPrice)
-	if err != nil {
-		return product, err
-	}
-
-	return product, nil
+func (s *PostgresStore) GetProductByID(ctx context.Context, id int) (models.Product, error) {
+	var p models.Product
+	err := s.db.QueryRowContext(ctx, "SELECT "+selectColumns+" FROM products WHERE id = $1", id).
+		Scan(&p.ID, &p.Name, &p.URL, &p.ActualPrice, &p.TargetPrice)
+	return p, err
 }
 
-func (s *PostgresStore) AddProduct(p models.Product) (int, error) {
-	var retrunedId int
+func (s *PostgresStore) AddProduct(ctx context.Context, p models.Product) (int, error) {
 	query := "INSERT INTO products(name, url, actual_price, target_price) VALUES ($1, $2, $3, $4) RETURNING id"
-
-	err := s.db.QueryRow(query, p.Name, p.URL, p.ActualPrice, p.TargetPrice).Scan(&retrunedId)
+	var returnedID int
+	err := s.db.QueryRowContext(ctx, query, p.Name, p.URL, p.ActualPrice, p.TargetPrice).Scan(&returnedID)
 	if err != nil {
 		return -1, err
 	}
-
-	return retrunedId, nil
+	return returnedID, nil
 }
 
-func (s *PostgresStore) UpdateProduct(id int, p models.Product) (models.Product, error) {
-	query := "UPDATE products SET (name, url, actual_price, target_price) = ($1, $2, $3, $4) WHERE id = $5"
-	var updatedProduct models.Product
-
-	_, err := s.db.Exec(query, p.Name, p.URL, p.ActualPrice, p.TargetPrice, id)
+func (s *PostgresStore) UpdateProduct(ctx context.Context, id int, p models.Product) (models.Product, error) {
+	query := "UPDATE products SET name=$1, url=$2, actual_price=$3, target_price=$4 WHERE id=$5 RETURNING " + selectColumns
+	var updated models.Product
+	err := s.db.QueryRowContext(ctx, query, p.Name, p.URL, p.ActualPrice, p.TargetPrice, id).
+		Scan(&updated.ID, &updated.Name, &updated.URL, &updated.ActualPrice, &updated.TargetPrice)
 	if err != nil {
-		return updatedProduct, err
+		return models.Product{}, err
 	}
-
-	return p, nil
+	return updated, nil
 }
 
-func (s *PostgresStore) DeleteProduct(id int) error {
-	query := "DELETE FROM products WHERE id = $1"
-
-	_, err := s.db.Exec(query, id)
-	if err != nil {
-		return err
-	}
-
-	return nil
+func (s *PostgresStore) DeleteProduct(ctx context.Context, id int) error {
+	_, err := s.db.ExecContext(ctx, "DELETE FROM products WHERE id = $1", id)
+	return err
 }
 
-func ValidateProduct(p models.Product) map[string]string {
-	var error map[string]string
-	error = make(map[string]string)
-
-	if len(p.Name) == 0 {
-		error["name"] = "is required"
-	}
-
-	if p.TargetPrice < 0 {
-		error["target_price"] = "must be a positive number"
-	}
-
-	if len(p.URL) == 0 {
-		error["url"] = "is required"
-	}
-
-	return error
+func (s *PostgresStore) Ping(ctx context.Context) error {
+	return s.db.PingContext(ctx)
 }

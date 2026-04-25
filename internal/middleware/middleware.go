@@ -24,7 +24,8 @@ func APIKeyMiddleware(next http.Handler) http.Handler {
 			return
 		}
 
-		if r.Header.Get("X-API-key") != os.Getenv("API_KEY") {
+		apiKey := os.Getenv("API_KEY")
+		if apiKey == "" || r.Header.Get("X-API-key") != apiKey {
 			slog.Warn("wrong api key")
 			w.WriteHeader(http.StatusUnauthorized)
 			return

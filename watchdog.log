@@ -47,3 +47,11 @@ time=2026-04-21T07:20:59.545+02:00 level=WARN msg="wrong api key"
 time=2026-04-21T07:20:59.545+02:00 level=INFO msg=request method=POST path=/products status=401 duration=97.484µs
 time=2026-04-21T07:21:19.036+02:00 level=INFO msg="product created" id=15
 time=2026-04-21T07:21:19.037+02:00 level=INFO msg=request method=POST path=/products status=201 duration=3.215468ms
+time=2026-04-25T11:27:21.161+02:00 level=INFO msg="HTTP Server started"
+time=2026-04-25T11:27:32.782+02:00 level=INFO msg="product created" id=16
+time=2026-04-25T11:27:32.782+02:00 level=INFO msg=request method=POST path=/products status=201 duration=1.120979335s
+time=2026-04-25T11:27:39.173+02:00 level=INFO msg="product created" id=17
+time=2026-04-25T11:27:39.173+02:00 level=INFO msg=request method=POST path=/products status=201 duration=4.688864ms
+time=2026-04-25T15:39:52.192+02:00 level=INFO msg="API_KEY must be set"
+time=2026-04-25T15:44:31.491+02:00 level=INFO msg="HTTP Server started"
+time=2026-04-25T15:44:44.693+02:00 level=INFO msg=request method=POST path=/products status=400 duration=289.66µs

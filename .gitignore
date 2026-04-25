@@ -1,3 +1,5 @@
 .env
 data/
 repomix-output.xml
+*.log
+CLAUDE.md

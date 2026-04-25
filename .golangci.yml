@@ -1,0 +1,20 @@
+version: "2"
+
+run:
+  timeout: 5m
+  exclude-dirs:
+    - data
+    - vendor
+
+linters:
+  enable:
+    - govet
+    - errcheck
+    - staticcheck
+    - unused
+    - ineffassign
+
+issues:
+  exclude-dirs:
+    - data
+    - vendor

@@ -3,6 +3,7 @@ package handlers
 import (
 	"context"
 	"database/sql"
+	stderr "errors"
 	"encoding/json"
 	"log/slog"
 	"net/http"
@@ -12,17 +13,19 @@ import (
 	"github.com/maxlesscode/watchdog/internal/database"
 	"github.com/maxlesscode/watchdog/internal/errors"
 	"github.com/maxlesscode/watchdog/internal/models"
+	"github.com/maxlesscode/watchdog/internal/validation"
 )
 
+const maxBodyBytes = 1 << 20 // 1 MB
+
 type Env struct {
-	DB    database.ProductStore
-	rawdb *sql.DB
+	DB database.ProductStore
 }
 
 func (e *Env) GetAllProducts(w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
 
-	allProducts, err := e.DB.GetAllProducts()
+	allProducts, err := e.DB.GetAllProducts(r.Context())
 	if err != nil {
 		slog.Error("failed to fetch products", "err", err)
 		errors.SendError(w, http.StatusInternalServerError, errors.CodeDatabaseError, "failed to fetch products")
@@ -30,27 +33,28 @@ func (e *Env) GetAllProducts(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-
-	err = json.NewEncoder(w).Encode(allProducts)
-	if err != nil {
+	if err = json.NewEncoder(w).Encode(allProducts); err != nil {
 		slog.Error("failed to encode json", "err", err)
 	}
 }
 
 func (e *Env) CreateProduct(w http.ResponseWriter, r *http.Request) {
+	r.Body = http.MaxBytesReader(w, r.Body, maxBodyBytes)
 	defer r.Body.Close()
 
 	var newProduct models.Product
-	err := json.NewDecoder(r.Body).Decode(&newProduct)
-	details := database.ValidateProduct(newProduct)
-
-	if err != nil {
+	if err := json.NewDecoder(r.Body).Decode(&newProduct); err != nil {
 		slog.Error("failed to decode request body", "err", err)
-		errors.SendError(w, http.StatusBadRequest, errors.CodeBadRequest, "invalid request body", details)
+		errors.SendError(w, http.StatusBadRequest, errors.CodeBadRequest, "invalid request body")
 		return
 	}
 
-	newProductID, err := e.DB.AddProduct(newProduct)
+	if details := validation.ValidateProduct(newProduct); len(details) > 0 {
+		errors.SendError(w, http.StatusBadRequest, errors.CodeValidationFailed, "validation failed", details)
+		return
+	}
+
+	newProductID, err := e.DB.AddProduct(r.Context(), newProduct)
 	if err != nil {
 		slog.Error("failed to create product", "err", err)
 		errors.SendError(w, http.StatusInternalServerError, errors.CodeDatabaseError, "failed to create product")
@@ -58,10 +62,12 @@ func (e *Env) CreateProduct(w http.ResponseWriter, r *http.Request) {
 	}
 
 	slog.Info("product created", "id", newProductID)
-
 	newProduct.ID = newProductID
+	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(newProduct)
+	if err = json.NewEncoder(w).Encode(newProduct); err != nil {
+		slog.Warn("failed to send json response", "err", err)
+	}
 }
 
 func (e *Env) GetProductByID(w http.ResponseWriter, r *http.Request) {
@@ -73,9 +79,9 @@ func (e *Env) GetProductByID(w http.ResponseWriter, r *http.Request) {
 		errors.SendError(w, http.StatusBadRequest, errors.CodeInvalidID, "failed to parse id")
 		return
 	}
-	product, err := e.DB.GetProductByID(productID)
-	if err == sql.ErrNoRows {
-		slog.Error("no product with id", "err", err)
+
+	product, err := e.DB.GetProductByID(r.Context(), productID)
+	if stderr.Is(err, sql.ErrNoRows) {
 		errors.SendError(w, http.StatusNotFound, errors.CodeNotFound, "no product with id")
 		return
 	} else if err != nil {
@@ -85,25 +91,19 @@ func (e *Env) GetProductByID(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-
-	err = json.NewEncoder(w).Encode(product)
-	if err != nil {
+	if err = json.NewEncoder(w).Encode(product); err != nil {
 		slog.Error("failed to encode json", "err", err)
-		errors.SendError(w, http.StatusInternalServerError, errors.CodeInternalError, "failed to encode json")
-		return
 	}
 }
 
 func (e *Env) UpdateProduct(w http.ResponseWriter, r *http.Request) {
+	r.Body = http.MaxBytesReader(w, r.Body, maxBodyBytes)
 	defer r.Body.Close()
 
 	var updatedProduct models.Product
-	err := json.NewDecoder(r.Body).Decode(&updatedProduct)
-	details := database.ValidateProduct(updatedProduct)
-
-	if err != nil {
+	if err := json.NewDecoder(r.Body).Decode(&updatedProduct); err != nil {
 		slog.Error("failed to decode json", "err", err)
-		errors.SendError(w, http.StatusBadRequest, errors.CodeBadRequest, "invalid json body", details)
+		errors.SendError(w, http.StatusBadRequest, errors.CodeBadRequest, "invalid json body")
 		return
 	}
 
@@ -114,20 +114,23 @@ func (e *Env) UpdateProduct(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if updatedProduct, err = e.DB.UpdateProduct(productID, updatedProduct); err != nil {
-		slog.Error("failed to update product", "err", err)
-		errors.SendError(w, http.StatusInternalServerError, errors.CodeInternalError, "failed to update product", details)
+	if details := validation.ValidateProduct(updatedProduct); len(details) > 0 {
+		errors.SendError(w, http.StatusBadRequest, errors.CodeBadRequest, "invalid json body", details)
 		return
 	}
 
-	updatedProduct.ID = productID
+	updatedProduct, err = e.DB.UpdateProduct(r.Context(), productID, updatedProduct)
+	if err != nil {
+		slog.Error("failed to update product", "err", err)
+		errors.SendError(w, http.StatusInternalServerError, errors.CodeInternalError, "failed to update product")
+		return
+	}
 
 	slog.Info("product updated", "id", productID)
+	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	err = json.NewEncoder(w).Encode(updatedProduct)
-	if err != nil {
+	if err = json.NewEncoder(w).Encode(updatedProduct); err != nil {
 		slog.Error("failed to send updated product json", "err", err)
-		return
 	}
 }
 
@@ -141,8 +144,7 @@ func (e *Env) DeleteProduct(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = e.DB.DeleteProduct(productID)
-	if err != nil {
+	if err = e.DB.DeleteProduct(r.Context(), productID); err != nil {
 		slog.Error("failed to delete product", "err", err)
 		errors.SendError(w, http.StatusInternalServerError, errors.CodeDatabaseError, "failed to delete product")
 		return
@@ -157,24 +159,21 @@ func (e *Env) HealthCheck(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 1*time.Second)
 	defer cancel()
 
-	err := e.rawdb.PingContext(ctx)
-
 	response := map[string]string{
 		"status": "up",
 		"time":   time.Now().Format(time.RFC3339),
 	}
 
-	if err != nil {
+	w.Header().Set("Content-Type", "application/json")
+	if err := e.DB.Ping(ctx); err != nil {
 		response["status"] = "down"
 		response["database"] = "unreachable"
-
-		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusServiceUnavailable)
-		json.NewEncoder(w).Encode(response)
-		return
+	} else {
+		w.WriteHeader(http.StatusOK)
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(response)
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		slog.Warn("failed to encode json", "err", err)
+	}
 }
