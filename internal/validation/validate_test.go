@@ -77,6 +77,21 @@ func TestValidateProduct(t *testing.T) {
 			wantErrKeys: []string{"url"},
 		},
 		{
+			name:        "private 172.16.x.x rejected",
+			product:     models.Product{Name: "Widget", URL: "http://172.16.0.1/product", TargetPrice: 9.99},
+			wantErrKeys: []string{"url"},
+		},
+		{
+			name:        "ipv6 loopback ::1 rejected",
+			product:     models.Product{Name: "Widget", URL: "http://[::1]/product", TargetPrice: 9.99},
+			wantErrKeys: []string{"url"},
+		},
+		{
+			name:      "public IP 93.184.216.34 accepted",
+			product:   models.Product{Name: "Widget", URL: "http://93.184.216.34/product", TargetPrice: 9.99},
+			wantClean: true,
+		},
+		{
 			name:        "multiple errors: name and url both missing",
 			product:     models.Product{TargetPrice: 9.99},
 			wantErrKeys: []string{"name", "url"},
@@ -105,6 +120,11 @@ func TestValidateProduct(t *testing.T) {
 				if _, ok := errs[key]; !ok {
 					t.Errorf("expected error key %q, got map: %v", key, errs)
 				}
+			}
+
+			if len(errs) != len(tt.wantErrKeys) {
+				t.Errorf("expected %d error keys %v, got %d: %v",
+					len(tt.wantErrKeys), tt.wantErrKeys, len(errs), errs)
 			}
 		})
 	}
