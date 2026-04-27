@@ -1,6 +1,6 @@
 module github.com/maxlesscode/watchdog
 
-go 1.26.1
+go 1.24
 
 require (
 	github.com/PuerkitoBio/goquery v1.12.0 // indirect
