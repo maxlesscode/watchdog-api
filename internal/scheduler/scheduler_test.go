@@ -148,6 +148,7 @@ func TestFetchAndStore_ScraperError_IncrementsErrorMetric(t *testing.T) {
 	before := metrics.ScrapeErrors.Value()
 	s.fetchAndStore(context.Background(), models.Product{ID: 1, URL: "https://example.com", TargetPrice: 50})
 
+	// delta < 1 not != 1: global counter; parallel tests may add more than 1
 	if delta := metrics.ScrapeErrors.Value() - before; delta < 1 {
 		t.Errorf("ScrapeErrors delta = %d, want >= 1", delta)
 	}
@@ -270,6 +271,7 @@ func TestFetchAndStore_SuccessfulScrape_IncrementsScrapeTotal(t *testing.T) {
 	before := metrics.ScrapeTotal.Value()
 	s.fetchAndStore(context.Background(), models.Product{ID: 1, URL: "https://example.com", TargetPrice: 50})
 
+	// delta < 1 not != 1: global counter; parallel tests may add more than 1
 	if delta := metrics.ScrapeTotal.Value() - before; delta < 1 {
 		t.Errorf("ScrapeTotal delta = %d, want >= 1", delta)
 	}
@@ -324,4 +326,32 @@ func TestRunCycle_ContextCancelled_StopsDispatching(t *testing.T) {
 	cancel() // pre-cancel so the cycle exits immediately
 
 	s.RunCycle(ctx) // must not hang
+}
+
+func TestFetchAndStore_InsertHistoryError_StillNotifies(t *testing.T) {
+	t.Parallel()
+	store := &mockStore{insertHistErr: errors.New("history insert failed")}
+	notif := &mockNotifier{}
+	s := newScheduler(store, &mockScraper{price: 30}, notif)
+
+	p := models.Product{ID: 1, URL: "https://example.com", TargetPrice: 50, LastAlertedAt: nil}
+	s.fetchAndStore(context.Background(), p)
+
+	if n := notif.calls.Load(); n != 1 {
+		t.Errorf("Notify calls = %d, want 1 — InsertPriceHistory error must not suppress alert", n)
+	}
+}
+
+func TestFetchAndStore_SuccessfulAlert_IncrementsAlertsSent(t *testing.T) {
+	t.Parallel()
+	s := newScheduler(&mockStore{}, &mockScraper{price: 30}, &mockNotifier{})
+
+	before := metrics.AlertsSent.Value()
+	p := models.Product{ID: 1, URL: "https://example.com", TargetPrice: 50, LastAlertedAt: nil}
+	s.fetchAndStore(context.Background(), p)
+
+	// delta < 1 not != 1: global counter; parallel tests may add more than 1
+	if delta := metrics.AlertsSent.Value() - before; delta < 1 {
+		t.Errorf("AlertsSent delta = %d, want >= 1", delta)
+	}
 }
