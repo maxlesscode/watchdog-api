@@ -123,3 +123,114 @@ func TestRateLimitMiddleware_SeparateBucketsPerIP(t *testing.T) {
 		}
 	}
 }
+
+func TestAPIKeyMiddleware(t *testing.T) {
+	// Not parallel: t.Setenv modifies global OS state; cannot mix with t.Parallel().
+	// Each subtest sets its own API_KEY value before constructing the middleware.
+	tests := []struct {
+		name       string
+		envKey     string
+		headerKey  string
+		path       string
+		wantStatus int
+	}{
+		{
+			name:       "correct key is accepted",
+			envKey:     "secret",
+			headerKey:  "secret",
+			path:       "/products",
+			wantStatus: http.StatusOK,
+		},
+		{
+			name:       "wrong key returns 401",
+			envKey:     "secret",
+			headerKey:  "wrong",
+			path:       "/products",
+			wantStatus: http.StatusUnauthorized,
+		},
+		{
+			name:       "missing key header returns 401",
+			envKey:     "secret",
+			headerKey:  "",
+			path:       "/products",
+			wantStatus: http.StatusUnauthorized,
+		},
+		{
+			name:       "empty API_KEY env always returns 401",
+			envKey:     "",
+			headerKey:  "",
+			path:       "/products",
+			wantStatus: http.StatusUnauthorized,
+		},
+		{
+			name:       "health path bypasses auth",
+			envKey:     "secret",
+			headerKey:  "",
+			path:       "/health",
+			wantStatus: http.StatusOK,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Setenv("API_KEY", tt.envKey)
+			handler := middleware.APIKeyMiddleware(http.HandlerFunc(okHandler))
+
+			req := httptest.NewRequest(http.MethodGet, tt.path, nil)
+			if tt.headerKey != "" {
+				req.Header.Set("X-API-key", tt.headerKey)
+			}
+			w := httptest.NewRecorder()
+			handler.ServeHTTP(w, req)
+
+			if w.Code != tt.wantStatus {
+				t.Errorf("status = %d, want %d", w.Code, tt.wantStatus)
+			}
+		})
+	}
+}
+
+func TestCORSMiddleware(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name       string
+		method     string
+		wantStatus int
+	}{
+		{
+			name:       "OPTIONS preflight returns 204 with CORS headers",
+			method:     http.MethodOptions,
+			wantStatus: http.StatusNoContent,
+		},
+		{
+			name:       "GET passes through and receives CORS headers",
+			method:     http.MethodGet,
+			wantStatus: http.StatusOK,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			handler := middleware.CORSMiddleware(http.HandlerFunc(okHandler))
+			req := httptest.NewRequest(tt.method, "/", nil)
+			w := httptest.NewRecorder()
+			handler.ServeHTTP(w, req)
+
+			if w.Code != tt.wantStatus {
+				t.Errorf("status = %d, want %d", w.Code, tt.wantStatus)
+			}
+			if got := w.Header().Get("Access-Control-Allow-Origin"); got != "*" {
+				t.Errorf("Access-Control-Allow-Origin = %q, want *", got)
+			}
+			if got := w.Header().Get("Access-Control-Allow-Methods"); got == "" {
+				t.Error("Access-Control-Allow-Methods header not set")
+			}
+			if got := w.Header().Get("Access-Control-Allow-Headers"); got == "" {
+				t.Error("Access-Control-Allow-Headers header not set")
+			}
+		})
+	}
+}
