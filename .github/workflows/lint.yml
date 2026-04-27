@@ -29,7 +29,7 @@ jobs:
         run: go vet github.com/maxlesscode/watchdog/internal/...
 
       - name: golangci-lint
-        uses: golangci/golangci-lint-action@v6
+        uses: golangci/golangci-lint-action@v7
         with:
           version: v2.11.1
 
