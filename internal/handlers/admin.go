@@ -14,7 +14,7 @@ func (e *Env) AdminScrape(w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
 
 	if e.TriggerScrape == nil {
-		errors.SendError(w, http.StatusServiceUnavailable, errors.CodeInternalError, "scraper not configured")
+		errors.SendError(r.Context(), w, errors.ErrorInput{Code: http.StatusServiceUnavailable, Tech: errors.CodeInternalError, Message: "scraper not configured"})
 		return
 	}
 

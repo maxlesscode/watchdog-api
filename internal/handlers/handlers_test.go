@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync/atomic"
 	"testing"
 
 	"github.com/maxlesscode/watchdog/internal/database"
@@ -236,4 +237,214 @@ func TestGetProductByID(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestUpdateProduct(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name       string
+		pathID     string
+		body       string
+		storeFn    func(ctx context.Context, id int, p models.Product) (models.Product, error)
+		wantStatus int
+	}{
+		{
+			name:   "valid update",
+			pathID: "1",
+			body:   `{"name":"Updated","url":"https://example.com","target_price":5}`,
+			storeFn: func(ctx context.Context, id int, p models.Product) (models.Product, error) {
+				return models.Product{ID: id, Name: p.Name, URL: p.URL, TargetPrice: p.TargetPrice}, nil
+			},
+			wantStatus: http.StatusOK,
+		},
+		{
+			name:       "invalid json",
+			pathID:     "1",
+			body:       `{bad`,
+			wantStatus: http.StatusBadRequest,
+		},
+		{
+			name:       "invalid id",
+			pathID:     "nope",
+			body:       `{"name":"Updated","url":"https://example.com","target_price":5}`,
+			wantStatus: http.StatusBadRequest,
+		},
+		{
+			name:       "validation fail — missing name",
+			pathID:     "1",
+			body:       `{"url":"https://example.com","target_price":5}`,
+			wantStatus: http.StatusBadRequest,
+		},
+		{
+			name:   "db error returns 500",
+			pathID: "1",
+			body:   `{"name":"Updated","url":"https://example.com","target_price":5}`,
+			storeFn: func(ctx context.Context, id int, p models.Product) (models.Product, error) {
+				return models.Product{}, sql.ErrConnDone
+			},
+			wantStatus: http.StatusInternalServerError,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			env := &Env{DB: &mockStore{updateProductFn: tt.storeFn}}
+
+			mux := http.NewServeMux()
+			mux.HandleFunc("PATCH /products/{id}", env.UpdateProduct)
+
+			req := httptest.NewRequest(http.MethodPatch, "/products/"+tt.pathID, strings.NewReader(tt.body))
+			req.Header.Set("Content-Type", "application/json")
+			w := httptest.NewRecorder()
+
+			mux.ServeHTTP(w, req)
+
+			if w.Code != tt.wantStatus {
+				t.Errorf("status = %d, want %d", w.Code, tt.wantStatus)
+			}
+		})
+	}
+}
+
+func TestDeleteProduct(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name       string
+		pathID     string
+		storeFn    func(ctx context.Context, id int) error
+		wantStatus int
+	}{
+		{
+			name:   "success",
+			pathID: "1",
+			storeFn: func(ctx context.Context, id int) error {
+				return nil
+			},
+			wantStatus: http.StatusNoContent,
+		},
+		{
+			name:       "invalid id",
+			pathID:     "abc",
+			wantStatus: http.StatusBadRequest,
+		},
+		{
+			name:   "db error returns 500",
+			pathID: "1",
+			storeFn: func(ctx context.Context, id int) error {
+				return sql.ErrConnDone
+			},
+			wantStatus: http.StatusInternalServerError,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			env := &Env{DB: &mockStore{deleteProductFn: tt.storeFn}}
+
+			mux := http.NewServeMux()
+			mux.HandleFunc("DELETE /products/{id}", env.DeleteProduct)
+
+			req := httptest.NewRequest(http.MethodDelete, "/products/"+tt.pathID, nil)
+			w := httptest.NewRecorder()
+
+			mux.ServeHTTP(w, req)
+
+			if w.Code != tt.wantStatus {
+				t.Errorf("status = %d, want %d", w.Code, tt.wantStatus)
+			}
+		})
+	}
+}
+
+func TestHealthCheck(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name       string
+		pingFn     func(ctx context.Context) error
+		wantStatus int
+		wantStatus_ string
+	}{
+		{
+			name:        "db reachable",
+			pingFn:      func(ctx context.Context) error { return nil },
+			wantStatus:  http.StatusOK,
+			wantStatus_: "up",
+		},
+		{
+			name:        "db unreachable",
+			pingFn:      func(ctx context.Context) error { return sql.ErrConnDone },
+			wantStatus:  http.StatusServiceUnavailable,
+			wantStatus_: "down",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			env := &Env{DB: &mockStore{pingFn: tt.pingFn}}
+			req := httptest.NewRequest(http.MethodGet, "/health", nil)
+			w := httptest.NewRecorder()
+
+			env.HealthCheck(w, req)
+
+			if w.Code != tt.wantStatus {
+				t.Errorf("status = %d, want %d", w.Code, tt.wantStatus)
+			}
+			var body map[string]string
+			if err := json.NewDecoder(w.Body).Decode(&body); err != nil {
+				t.Fatal("decode:", err)
+			}
+			if body["status"] != tt.wantStatus_ {
+				t.Errorf("status field = %q, want %q", body["status"], tt.wantStatus_)
+			}
+		})
+	}
+}
+
+func TestAdminScrape(t *testing.T) {
+	t.Parallel()
+
+	t.Run("nil trigger returns 503", func(t *testing.T) {
+		t.Parallel()
+		env := &Env{DB: &mockStore{}, TriggerScrape: nil}
+		req := httptest.NewRequest(http.MethodPost, "/admin/scrape", nil)
+		w := httptest.NewRecorder()
+
+		env.AdminScrape(w, req)
+
+		if w.Code != http.StatusServiceUnavailable {
+			t.Errorf("status = %d, want 503", w.Code)
+		}
+	})
+
+	t.Run("wired trigger returns 202 and fires", func(t *testing.T) {
+		t.Parallel()
+		var called atomic.Bool
+		done := make(chan struct{})
+
+		env := &Env{
+			DB: &mockStore{},
+			TriggerScrape: func(ctx context.Context) {
+				called.Store(true)
+				close(done)
+			},
+		}
+		req := httptest.NewRequest(http.MethodPost, "/admin/scrape", nil)
+		w := httptest.NewRecorder()
+
+		env.AdminScrape(w, req)
+
+		if w.Code != http.StatusAccepted {
+			t.Errorf("status = %d, want 202", w.Code)
+		}
+		<-done
+		if !called.Load() {
+			t.Error("TriggerScrape not called")
+		}
+	})
 }

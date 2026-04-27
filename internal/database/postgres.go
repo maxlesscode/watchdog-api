@@ -54,25 +54,35 @@ func configDB() Config {
 	return cfg
 }
 
-func runMigrations(db *sql.DB, dbname string) {
+func runMigrations(db *sql.DB, dbname string) error {
 	src, err := iofs.New(migrationsFS, "migrations")
 	if err != nil {
-		log.Fatal("failed to load migration source: ", err)
+		return fmt.Errorf("load migration source: %w", err)
 	}
 
 	driver, err := migratepostgres.WithInstance(db, &migratepostgres.Config{DatabaseName: dbname})
 	if err != nil {
-		log.Fatal("failed to create migration driver: ", err)
+		return fmt.Errorf("create migration driver: %w", err)
 	}
 
 	m, err := migrate.NewWithInstance("iofs", src, dbname, driver)
 	if err != nil {
-		log.Fatal("failed to init migrator: ", err)
+		return fmt.Errorf("init migrator: %w", err)
 	}
 
 	if err = m.Up(); err != nil && !errors.Is(err, migrate.ErrNoChange) {
-		log.Fatal("migration failed: ", err)
+		return fmt.Errorf("migrate up: %w", err)
 	}
+	return nil
+}
+
+// MigrateDB applies all pending migrations to db. Exported for integration tests.
+func MigrateDB(db *sql.DB) error {
+	var dbname string
+	if err := db.QueryRow("SELECT current_database()").Scan(&dbname); err != nil {
+		return fmt.Errorf("get db name: %w", err)
+	}
+	return runMigrations(db, dbname)
 }
 
 func StartDB() *sql.DB {
@@ -90,7 +100,9 @@ func StartDB() *sql.DB {
 		log.Fatal("database not alive: ", err)
 	}
 
-	runMigrations(db, cfg.dbname)
+	if err = runMigrations(db, cfg.dbname); err != nil {
+		log.Fatal("migration failed: ", err)
+	}
 
 	return db
 }

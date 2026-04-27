@@ -29,7 +29,7 @@ func (e *Env) GetAllProducts(w http.ResponseWriter, r *http.Request) {
 	allProducts, err := e.DB.GetAllProducts(r.Context())
 	if err != nil {
 		slog.Error("failed to fetch products", "err", err)
-		errors.SendError(w, http.StatusInternalServerError, errors.CodeDatabaseError, "failed to fetch products")
+		errors.SendError(r.Context(), w, errors.ErrorInput{Code: http.StatusInternalServerError, Tech: errors.CodeDatabaseError, Message: "failed to fetch products"})
 		return
 	}
 
@@ -46,19 +46,19 @@ func (e *Env) CreateProduct(w http.ResponseWriter, r *http.Request) {
 	var newProduct models.Product
 	if err := json.NewDecoder(r.Body).Decode(&newProduct); err != nil {
 		slog.Error("failed to decode request body", "err", err)
-		errors.SendError(w, http.StatusBadRequest, errors.CodeBadRequest, "invalid request body")
+		errors.SendError(r.Context(), w, errors.ErrorInput{Code: http.StatusBadRequest, Tech: errors.CodeBadRequest, Message: "invalid request body"})
 		return
 	}
 
 	if details := validation.ValidateProduct(newProduct); len(details) > 0 {
-		errors.SendError(w, http.StatusBadRequest, errors.CodeValidationFailed, "validation failed", details)
+		errors.SendError(r.Context(), w, errors.ErrorInput{Code: http.StatusBadRequest, Tech: errors.CodeValidationFailed, Message: "validation failed", Details: details})
 		return
 	}
 
 	newProductID, err := e.DB.AddProduct(r.Context(), newProduct)
 	if err != nil {
 		slog.Error("failed to create product", "err", err)
-		errors.SendError(w, http.StatusInternalServerError, errors.CodeDatabaseError, "failed to create product")
+		errors.SendError(r.Context(), w, errors.ErrorInput{Code: http.StatusInternalServerError, Tech: errors.CodeDatabaseError, Message: "failed to create product"})
 		return
 	}
 
@@ -77,17 +77,17 @@ func (e *Env) GetProductByID(w http.ResponseWriter, r *http.Request) {
 	productID, err := strconv.Atoi(r.PathValue("id"))
 	if err != nil {
 		slog.Error("failed to parse id", "err", err)
-		errors.SendError(w, http.StatusBadRequest, errors.CodeInvalidID, "failed to parse id")
+		errors.SendError(r.Context(), w, errors.ErrorInput{Code: http.StatusBadRequest, Tech: errors.CodeInvalidID, Message: "failed to parse id"})
 		return
 	}
 
 	product, err := e.DB.GetProductByID(r.Context(), productID)
 	if stderr.Is(err, sql.ErrNoRows) {
-		errors.SendError(w, http.StatusNotFound, errors.CodeNotFound, "no product with id")
+		errors.SendError(r.Context(), w, errors.ErrorInput{Code: http.StatusNotFound, Tech: errors.CodeNotFound, Message: "no product with id"})
 		return
 	} else if err != nil {
 		slog.Error("failed to get product", "err", err)
-		errors.SendError(w, http.StatusInternalServerError, errors.CodeInternalError, "failed to get product")
+		errors.SendError(r.Context(), w, errors.ErrorInput{Code: http.StatusInternalServerError, Tech: errors.CodeInternalError, Message: "failed to get product"})
 		return
 	}
 
@@ -104,26 +104,26 @@ func (e *Env) UpdateProduct(w http.ResponseWriter, r *http.Request) {
 	var updatedProduct models.Product
 	if err := json.NewDecoder(r.Body).Decode(&updatedProduct); err != nil {
 		slog.Error("failed to decode json", "err", err)
-		errors.SendError(w, http.StatusBadRequest, errors.CodeBadRequest, "invalid json body")
+		errors.SendError(r.Context(), w, errors.ErrorInput{Code: http.StatusBadRequest, Tech: errors.CodeBadRequest, Message: "invalid json body"})
 		return
 	}
 
 	productID, err := strconv.Atoi(r.PathValue("id"))
 	if err != nil {
 		slog.Error("failed to parse id", "err", err)
-		errors.SendError(w, http.StatusBadRequest, errors.CodeInvalidID, "failed to parse id")
+		errors.SendError(r.Context(), w, errors.ErrorInput{Code: http.StatusBadRequest, Tech: errors.CodeInvalidID, Message: "failed to parse id"})
 		return
 	}
 
 	if details := validation.ValidateProduct(updatedProduct); len(details) > 0 {
-		errors.SendError(w, http.StatusBadRequest, errors.CodeBadRequest, "invalid json body", details)
+		errors.SendError(r.Context(), w, errors.ErrorInput{Code: http.StatusBadRequest, Tech: errors.CodeBadRequest, Message: "invalid json body", Details: details})
 		return
 	}
 
 	updatedProduct, err = e.DB.UpdateProduct(r.Context(), productID, updatedProduct)
 	if err != nil {
 		slog.Error("failed to update product", "err", err)
-		errors.SendError(w, http.StatusInternalServerError, errors.CodeInternalError, "failed to update product")
+		errors.SendError(r.Context(), w, errors.ErrorInput{Code: http.StatusInternalServerError, Tech: errors.CodeInternalError, Message: "failed to update product"})
 		return
 	}
 
@@ -141,13 +141,13 @@ func (e *Env) DeleteProduct(w http.ResponseWriter, r *http.Request) {
 	productID, err := strconv.Atoi(r.PathValue("id"))
 	if err != nil {
 		slog.Error("failed to parse id", "err", err)
-		errors.SendError(w, http.StatusBadRequest, errors.CodeBadRequest, "failed to convert id")
+		errors.SendError(r.Context(), w, errors.ErrorInput{Code: http.StatusBadRequest, Tech: errors.CodeBadRequest, Message: "failed to convert id"})
 		return
 	}
 
 	if err = e.DB.DeleteProduct(r.Context(), productID); err != nil {
 		slog.Error("failed to delete product", "err", err)
-		errors.SendError(w, http.StatusInternalServerError, errors.CodeDatabaseError, "failed to delete product")
+		errors.SendError(r.Context(), w, errors.ErrorInput{Code: http.StatusInternalServerError, Tech: errors.CodeDatabaseError, Message: "failed to delete product"})
 		return
 	}
 

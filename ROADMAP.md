@@ -78,14 +78,14 @@ Alert user when price drops below target.
 - [x] Validate SMTP config on startup (CFG-1)
 
 ### 2.3 — Alert check in scheduler
-- [ ] After price update: if `actual_price <= target_price` → call `Notifier.Notify`
-- [ ] Log alert sent with product ID, prices (OBS-1)
+- [x] After price update: if `actual_price <= target_price` → call `Notifier.Notify`
+- [x] Log alert sent with product ID, prices (OBS-1)
 
 ### 2.4 — Deduplication (no spam)
-- [ ] Add `last_alerted_at TIMESTAMPTZ` column to `products`
-- [ ] Only fire notification if `last_alerted_at` is null OR `last_alerted_at < last_checked_at - 24h`
-- [ ] Update `last_alerted_at` after successful notify
-- [ ] Extend `ProductStore` with `UpdateLastAlerted(ctx, id, t)`
+- [x] Add `last_alerted_at TIMESTAMPTZ` column to `products`
+- [x] Only fire notification if `last_alerted_at` is null OR `last_alerted_at < last_checked_at - 24h`
+- [x] Update `last_alerted_at` after successful notify
+- [x] Extend `ProductStore` with `UpdateLastAlerted(ctx, id, t)`
 
 ---
 
@@ -94,26 +94,26 @@ Alert user when price drops below target.
 Production-grade reliability.
 
 ### 3.1 — Rate limiting
-- [ ] Add rate limiter middleware: `golang.org/x/time/rate`
-- [ ] Per-IP bucket, configurable via env (`RATE_LIMIT`, `RATE_BURST`)
+- [x] Add rate limiter middleware: `golang.org/x/time/rate`
+- [x] Per-IP bucket, configurable via env (`RATE_LIMIT`, `RATE_BURST`)
 
 ### 3.2 — Request ID propagation
-- [ ] Generate `X-Request-ID` in `LoggingMiddleware`, store in `ctx` (OBS-2)
-- [ ] Pass through to logs and error responses
+- [x] Generate `X-Request-ID` in `LoggingMiddleware`, store in `ctx` (OBS-2)
+- [x] Pass through to logs and error responses
 
 ### 3.3 — Scraper resilience
-- [ ] Retry with exponential backoff (max 3 attempts) per product
-- [ ] Circuit-breaker per domain: pause scraping domain after N consecutive failures
+- [x] Retry with exponential backoff (max 3 attempts) per product
+- [x] Circuit-breaker per domain: pause scraping domain after N consecutive failures
 
 ### 3.4 — Metrics / pprof
-- [ ] Expose `/debug/pprof` guarded by localhost-only check (OBS-3)
-- [ ] Basic counters: `scrape_total`, `scrape_errors`, `alerts_sent`
+- [x] Expose `/debug/pprof` guarded by localhost-only check (OBS-3)
+- [x] Basic counters: `scrape_total`, `scrape_errors`, `alerts_sent`
 
 ### 3.5 — Tests
-- [ ] Table-driven unit tests for scraper HTML parsing (T-1)
-- [ ] Integration tests for DB layer using real Postgres (testcontainers or docker compose test target)
-- [ ] Handler tests already partially done — expand coverage
-- [ ] All tests pass with `-race` flag (T-2)
+- [x] Table-driven unit tests for scraper HTML parsing (T-1)
+- [x] Integration tests for DB layer using real Postgres (testcontainers or docker compose test target)
+- [x] Handler tests already partially done — expand coverage
+- [x] All tests pass with `-race` flag (T-2)
 
 ---
 

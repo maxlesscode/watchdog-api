@@ -8,6 +8,7 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"github.com/maxlesscode/watchdog/internal/database"
+	"github.com/maxlesscode/watchdog/internal/metrics"
 	"github.com/maxlesscode/watchdog/internal/models"
 	"github.com/maxlesscode/watchdog/internal/notifier"
 	"github.com/maxlesscode/watchdog/internal/scraper"
@@ -17,8 +18,8 @@ import (
 type Config struct {
 	Store    database.ProductStore
 	Scraper  scraper.Scraper
-	Notifier notifier.Notifier // nil until Phase 2
-	Interval time.Duration     // defaults to 1h
+	Notifier notifier.Notifier
+	Interval time.Duration // defaults to 1h
 }
 
 // Scheduler periodically scrapes prices for all tracked products.
@@ -70,7 +71,6 @@ func (s *Scheduler) RunCycle(ctx context.Context) {
 
 	var g errgroup.Group
 	for _, p := range products {
-		p := p
 		g.Go(func() error {
 			s.fetchAndStore(ctx, p)
 			return nil // log per-product errors; never abort the cycle
@@ -85,6 +85,7 @@ func (s *Scheduler) fetchAndStore(ctx context.Context, p models.Product) {
 	price, err := s.scraper.FetchPrice(ctx, p.URL, p.PriceSelector)
 	if err != nil {
 		slog.Error("scheduler: scrape failed", "product_id", p.ID, "url", p.URL, "err", err)
+		metrics.ScrapeErrors.Add(1)
 		return
 	}
 
@@ -94,6 +95,7 @@ func (s *Scheduler) fetchAndStore(ctx context.Context, p models.Product) {
 		CheckedAt: now,
 	}); err != nil {
 		slog.Error("scheduler: update price failed", "product_id", p.ID, "err", err)
+		metrics.ScrapeErrors.Add(1)
 		return
 	}
 
@@ -103,9 +105,9 @@ func (s *Scheduler) fetchAndStore(ctx context.Context, p models.Product) {
 		CheckedAt: now,
 	}); err != nil {
 		slog.Error("scheduler: insert history failed", "product_id", p.ID, "err", err)
-		return
 	}
 
+	metrics.ScrapeTotal.Add(1)
 	slog.Info("scheduler: price updated", "product_id", p.ID, "price", price)
 
 	p.ActualPrice = price
@@ -121,6 +123,7 @@ func (s *Scheduler) fetchAndStore(ctx context.Context, p models.Product) {
 		}); err != nil {
 			slog.Error("scheduler: update last_alerted_at failed", "product_id", p.ID, "err", err)
 		}
+		metrics.AlertsSent.Add(1)
 		slog.Info("scheduler: alert sent", "product_id", p.ID, "actual_price", price, "target_price", p.TargetPrice)
 	}
 }
