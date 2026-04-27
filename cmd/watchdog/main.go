@@ -46,7 +46,7 @@ func main() {
 	defer stop()
 
 	store := database.NewPostgresStore(db)
-	htmlScraper := scraper.NewHTMLScraper(&http.Client{Timeout: 5 * time.Second})
+	htmlScraper := scraper.NewHTMLScraper(scraper.NewSafeHTTPClient(5 * time.Second))
 	resilientScraper := scraper.NewResilientScraper(htmlScraper, scraper.ResilientConfig{
 		MaxAttempts:      3,
 		InitialDelay:     time.Second,

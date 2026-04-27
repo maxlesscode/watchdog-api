@@ -14,6 +14,7 @@ import (
 	"time"
 
 	apierrors "github.com/maxlesscode/watchdog/internal/errors"
+	"github.com/maxlesscode/watchdog/internal/netutil"
 	"golang.org/x/time/rate"
 )
 
@@ -172,23 +173,6 @@ func newRequestID() string {
 	return hex.EncodeToString(b)
 }
 
-var privateRanges = []net.IPNet{
-	{IP: net.ParseIP("10.0.0.0"), Mask: net.CIDRMask(8, 32)},
-	{IP: net.ParseIP("172.16.0.0"), Mask: net.CIDRMask(12, 32)},
-	{IP: net.ParseIP("192.168.0.0"), Mask: net.CIDRMask(16, 32)},
-	{IP: net.ParseIP("127.0.0.0"), Mask: net.CIDRMask(8, 32)},
-	{IP: net.ParseIP("::1"), Mask: net.CIDRMask(128, 128)},
-}
-
-func isPrivateIP(ip net.IP) bool {
-	for _, r := range privateRanges {
-		if r.Contains(ip) {
-			return true
-		}
-	}
-	return false
-}
-
 func realIP(r *http.Request) string {
 	remoteHost, _, err := net.SplitHostPort(r.RemoteAddr)
 	if err != nil {
@@ -196,7 +180,7 @@ func realIP(r *http.Request) string {
 	}
 
 	// Only trust X-Forwarded-For when the direct caller is a trusted proxy.
-	if remoteIP := net.ParseIP(remoteHost); remoteIP != nil && isPrivateIP(remoteIP) {
+	if remoteIP := net.ParseIP(remoteHost); remoteIP != nil && netutil.IsPrivateIP(remoteIP) {
 		if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
 			if first, _, ok := strings.Cut(xff, ","); ok {
 				return strings.TrimSpace(first)
