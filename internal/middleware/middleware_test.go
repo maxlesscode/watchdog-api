@@ -225,11 +225,11 @@ func TestCORSMiddleware(t *testing.T) {
 			if got := w.Header().Get("Access-Control-Allow-Origin"); got != "*" {
 				t.Errorf("Access-Control-Allow-Origin = %q, want *", got)
 			}
-			if got := w.Header().Get("Access-Control-Allow-Methods"); got == "" {
-				t.Error("Access-Control-Allow-Methods header not set")
+			if got := w.Header().Get("Access-Control-Allow-Methods"); got != "GET, POST, PATCH, DELETE, OPTIONS" {
+				t.Errorf("Access-Control-Allow-Methods = %q, want %q", got, "GET, POST, PATCH, DELETE, OPTIONS")
 			}
-			if got := w.Header().Get("Access-Control-Allow-Headers"); got == "" {
-				t.Error("Access-Control-Allow-Headers header not set")
+			if got := w.Header().Get("Access-Control-Allow-Headers"); got != "X-API-Key, Content-Type" {
+				t.Errorf("Access-Control-Allow-Headers = %q, want %q", got, "X-API-Key, Content-Type")
 			}
 		})
 	}
