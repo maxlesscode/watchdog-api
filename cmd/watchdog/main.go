@@ -80,7 +80,7 @@ func main() {
 
 	srv := http.Server{
 		Addr:         ":9999",
-		Handler:      m.CORSMiddleware(m.LoggingMiddleware(m.RateLimitMiddleware(rateLimitRPS, rateBurst)(m.APIKeyMiddleware(mux)))),
+		Handler:      m.CORSMiddleware(m.LoggingMiddleware(m.RateLimitMiddleware(ctx, rateLimitRPS, rateBurst)(m.APIKeyMiddleware(mux)))),
 		ReadTimeout:  5 * time.Second,
 		WriteTimeout: 10 * time.Second,
 		IdleTimeout:  90 * time.Second,

@@ -1,7 +1,9 @@
 package middleware
 
 import (
+	"context"
 	"crypto/rand"
+	"crypto/subtle"
 	"encoding/hex"
 	"log/slog"
 	"net"
@@ -25,15 +27,21 @@ func (rw *responseWriter) WriteHeader(code int) {
 	rw.ResponseWriter.WriteHeader(code)
 }
 
+func (rw *responseWriter) Flush() {
+	if f, ok := rw.ResponseWriter.(http.Flusher); ok {
+		f.Flush()
+	}
+}
+
 func APIKeyMiddleware(next http.Handler) http.Handler {
+	apiKey := os.Getenv("API_KEY")
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/health" {
 			next.ServeHTTP(w, r)
 			return
 		}
 
-		apiKey := os.Getenv("API_KEY")
-		if apiKey == "" || r.Header.Get("X-API-key") != apiKey {
+		if apiKey == "" || subtle.ConstantTimeCompare([]byte(r.Header.Get("X-API-key")), []byte(apiKey)) != 1 {
 			slog.Warn("wrong api key")
 			w.WriteHeader(http.StatusUnauthorized)
 			return
@@ -85,9 +93,14 @@ func LoggingMiddleware(next http.Handler) http.Handler {
 	})
 }
 
+type limiterEntry struct {
+	limiter  *rate.Limiter
+	lastSeen time.Time
+}
+
 type rateLimiterStore struct {
 	mu       sync.Mutex
-	limiters map[string]*rate.Limiter
+	limiters map[string]*limiterEntry
 	rps      rate.Limit
 	burst    int
 }
@@ -95,21 +108,49 @@ type rateLimiterStore struct {
 func (s *rateLimiterStore) get(ip string) *rate.Limiter {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	l, ok := s.limiters[ip]
+
+	e, ok := s.limiters[ip]
 	if !ok {
-		l = rate.NewLimiter(s.rps, s.burst)
-		s.limiters[ip] = l
+		e = &limiterEntry{limiter: rate.NewLimiter(s.rps, s.burst)}
+		s.limiters[ip] = e
 	}
-	return l
+	e.lastSeen = time.Now()
+	return e.limiter
+}
+
+func (s *rateLimiterStore) cleanup() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	cutoff := time.Now().Add(-1 * time.Hour)
+	for ip, e := range s.limiters {
+		if e.lastSeen.Before(cutoff) {
+			delete(s.limiters, ip)
+		}
+	}
 }
 
 // RateLimitMiddleware enforces per-IP request rate limiting.
-func RateLimitMiddleware(rps float64, burst int) func(http.Handler) http.Handler {
+// ctx controls the lifetime of the background cleanup goroutine.
+func RateLimitMiddleware(ctx context.Context, rps float64, burst int) func(http.Handler) http.Handler {
 	store := &rateLimiterStore{
-		limiters: make(map[string]*rate.Limiter),
+		limiters: make(map[string]*limiterEntry),
 		rps:      rate.Limit(rps),
 		burst:    burst,
 	}
+
+	go func() {
+		t := time.NewTicker(10 * time.Minute)
+		defer t.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-t.C:
+				store.cleanup()
+			}
+		}
+	}()
+
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if !store.get(realIP(r)).Allow() {
@@ -131,16 +172,38 @@ func newRequestID() string {
 	return hex.EncodeToString(b)
 }
 
-func realIP(r *http.Request) string {
-	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
-		if first, _, ok := strings.Cut(xff, ","); ok {
-			return strings.TrimSpace(first)
+var privateRanges = []net.IPNet{
+	{IP: net.ParseIP("10.0.0.0"), Mask: net.CIDRMask(8, 32)},
+	{IP: net.ParseIP("172.16.0.0"), Mask: net.CIDRMask(12, 32)},
+	{IP: net.ParseIP("192.168.0.0"), Mask: net.CIDRMask(16, 32)},
+	{IP: net.ParseIP("127.0.0.0"), Mask: net.CIDRMask(8, 32)},
+	{IP: net.ParseIP("::1"), Mask: net.CIDRMask(128, 128)},
+}
+
+func isPrivateIP(ip net.IP) bool {
+	for _, r := range privateRanges {
+		if r.Contains(ip) {
+			return true
 		}
-		return strings.TrimSpace(xff)
 	}
-	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	return false
+}
+
+func realIP(r *http.Request) string {
+	remoteHost, _, err := net.SplitHostPort(r.RemoteAddr)
 	if err != nil {
-		return r.RemoteAddr
+		remoteHost = r.RemoteAddr
 	}
-	return host
+
+	// Only trust X-Forwarded-For when the direct caller is a trusted proxy.
+	if remoteIP := net.ParseIP(remoteHost); remoteIP != nil && isPrivateIP(remoteIP) {
+		if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
+			if first, _, ok := strings.Cut(xff, ","); ok {
+				return strings.TrimSpace(first)
+			}
+			return strings.TrimSpace(xff)
+		}
+	}
+
+	return remoteHost
 }

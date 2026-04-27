@@ -9,6 +9,12 @@ import (
 	"github.com/maxlesscode/watchdog/internal/models"
 )
 
+// sanitizeHeader strips CR and LF to prevent email header injection.
+func sanitizeHeader(s string) string {
+	s = strings.ReplaceAll(s, "\r", "")
+	return strings.ReplaceAll(s, "\n", " ")
+}
+
 // SMTPConfig holds SMTP connection settings.
 type SMTPConfig struct {
 	Host       string
@@ -62,10 +68,10 @@ func (n *SMTPNotifier) Notify(ctx context.Context, p models.Product) error {
 	addr := n.cfg.Host + ":" + n.cfg.Port
 	auth := smtp.PlainAuth("", n.cfg.User, n.cfg.Pass, n.cfg.Host)
 
-	subject := fmt.Sprintf("Price alert: %s is now %.2f", p.Name, p.ActualPrice)
+	subject := fmt.Sprintf("Price alert: %s is now %.2f", sanitizeHeader(p.Name), p.ActualPrice)
 	body := fmt.Sprintf(
 		"Product:       %s\nURL:           %s\nCurrent price: %.2f\nTarget price:  %.2f",
-		p.Name, p.URL, p.ActualPrice, p.TargetPrice,
+		sanitizeHeader(p.Name), sanitizeHeader(p.URL), p.ActualPrice, p.TargetPrice,
 	)
 	msg := []byte(
 		"To: " + n.cfg.AlertEmail + "\r\n" +
@@ -75,8 +81,18 @@ func (n *SMTPNotifier) Notify(ctx context.Context, p models.Product) error {
 			body,
 	)
 
-	if err := smtp.SendMail(addr, auth, n.cfg.User, []string{n.cfg.AlertEmail}, msg); err != nil {
-		return fmt.Errorf("smtp send to %s: %w", n.cfg.AlertEmail, err)
+	// smtp.SendMail blocks with no ctx support; race it against ctx cancellation.
+	// The spawned goroutine may outlive cancellation until the OS TCP timeout fires.
+	done := make(chan error, 1)
+	go func() { done <- smtp.SendMail(addr, auth, n.cfg.User, []string{n.cfg.AlertEmail}, msg) }()
+
+	select {
+	case <-ctx.Done():
+		return fmt.Errorf("smtp notify cancelled: %w", ctx.Err())
+	case err := <-done:
+		if err != nil {
+			return fmt.Errorf("smtp send to %s: %w", n.cfg.AlertEmail, err)
+		}
+		return nil
 	}
-	return nil
 }

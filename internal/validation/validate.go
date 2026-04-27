@@ -1,21 +1,27 @@
 package validation
 
-import "github.com/maxlesscode/watchdog/internal/models"
+import (
+	"net/url"
+
+	"github.com/maxlesscode/watchdog/internal/models"
+)
 
 func ValidateProduct(p models.Product) map[string]string {
-	error := make(map[string]string)
+	errs := make(map[string]string)
 
 	if len(p.Name) == 0 {
-		error["name"] = "is required"
+		errs["name"] = "is required"
 	}
 
-	if p.TargetPrice < 0 {
-		error["target_price"] = "must be a positive number"
+	if p.TargetPrice <= 0 {
+		errs["target_price"] = "must be greater than zero"
 	}
 
 	if len(p.URL) == 0 {
-		error["url"] = "is required"
+		errs["url"] = "is required"
+	} else if u, err := url.Parse(p.URL); err != nil || u.Host == "" || (u.Scheme != "http" && u.Scheme != "https") {
+		errs["url"] = "must be a valid http or https URL"
 	}
 
-	return error
+	return errs
 }

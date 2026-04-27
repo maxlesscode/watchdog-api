@@ -16,31 +16,45 @@ import (
 
 // Config holds Scheduler dependencies and options.
 type Config struct {
-	Store    database.ProductStore
-	Scraper  scraper.Scraper
-	Notifier notifier.Notifier
-	Interval time.Duration // defaults to 1h
+	Store       database.ProductStore
+	Scraper     scraper.Scraper
+	Notifier    notifier.Notifier
+	Interval    time.Duration // defaults to 1h
+	Concurrency int           // max parallel scrapes per cycle; defaults to 20
 }
 
 // Scheduler periodically scrapes prices for all tracked products.
 type Scheduler struct {
-	store    database.ProductStore
-	scraper  scraper.Scraper
-	notifier notifier.Notifier
-	interval time.Duration
+	store       database.ProductStore
+	scraper     scraper.Scraper
+	notifier    notifier.Notifier
+	interval    time.Duration
+	concurrency int
 }
 
-// New returns a Scheduler from cfg. Interval defaults to 1h if zero.
+// New returns a Scheduler from cfg. Interval defaults to 1h, concurrency to 20 if zero.
+// Panics if Store or Scraper is nil.
 func New(cfg Config) *Scheduler {
+	if cfg.Store == nil {
+		panic("scheduler.New: Store must not be nil")
+	}
+	if cfg.Scraper == nil {
+		panic("scheduler.New: Scraper must not be nil")
+	}
 	interval := cfg.Interval
 	if interval == 0 {
 		interval = time.Hour
 	}
+	concurrency := cfg.Concurrency
+	if concurrency <= 0 {
+		concurrency = 20
+	}
 	return &Scheduler{
-		store:    cfg.Store,
-		scraper:  cfg.Scraper,
-		notifier: cfg.Notifier,
-		interval: interval,
+		store:       cfg.Store,
+		scraper:     cfg.Scraper,
+		notifier:    cfg.Notifier,
+		interval:    interval,
+		concurrency: concurrency,
 	}
 }
 
@@ -69,9 +83,17 @@ func (s *Scheduler) RunCycle(ctx context.Context) {
 		return
 	}
 
+	sem := make(chan struct{}, s.concurrency)
 	var g errgroup.Group
 	for _, p := range products {
+		select {
+		case sem <- struct{}{}:
+		case <-ctx.Done():
+			_ = g.Wait()
+			return
+		}
 		g.Go(func() error {
+			defer func() { <-sem }()
 			s.fetchAndStore(ctx, p)
 			return nil // log per-product errors; never abort the cycle
 		})

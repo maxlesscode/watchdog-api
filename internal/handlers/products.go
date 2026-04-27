@@ -121,7 +121,10 @@ func (e *Env) UpdateProduct(w http.ResponseWriter, r *http.Request) {
 	}
 
 	updatedProduct, err = e.DB.UpdateProduct(r.Context(), productID, updatedProduct)
-	if err != nil {
+	if stderr.Is(err, sql.ErrNoRows) {
+		errors.SendError(r.Context(), w, errors.ErrorInput{Code: http.StatusNotFound, Tech: errors.CodeNotFound, Message: "no product with id"})
+		return
+	} else if err != nil {
 		slog.Error("failed to update product", "err", err)
 		errors.SendError(r.Context(), w, errors.ErrorInput{Code: http.StatusInternalServerError, Tech: errors.CodeInternalError, Message: "failed to update product"})
 		return
@@ -129,7 +132,6 @@ func (e *Env) UpdateProduct(w http.ResponseWriter, r *http.Request) {
 
 	slog.Info("product updated", "id", productID)
 	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
 	if err = json.NewEncoder(w).Encode(updatedProduct); err != nil {
 		slog.Error("failed to send updated product json", "err", err)
 	}
@@ -145,7 +147,10 @@ func (e *Env) DeleteProduct(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err = e.DB.DeleteProduct(r.Context(), productID); err != nil {
+	if err = e.DB.DeleteProduct(r.Context(), productID); stderr.Is(err, sql.ErrNoRows) {
+		errors.SendError(r.Context(), w, errors.ErrorInput{Code: http.StatusNotFound, Tech: errors.CodeNotFound, Message: "no product with id"})
+		return
+	} else if err != nil {
 		slog.Error("failed to delete product", "err", err)
 		errors.SendError(r.Context(), w, errors.ErrorInput{Code: http.StatusInternalServerError, Tech: errors.CodeDatabaseError, Message: "failed to delete product"})
 		return

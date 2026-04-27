@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"regexp"
 	"strconv"
@@ -43,7 +44,11 @@ func (s *HTMLScraper) FetchPrice(ctx context.Context, url, selector string) (flo
 		return 0, fmt.Errorf("fetch %s: unexpected status %d", url, resp.StatusCode)
 	}
 
-	doc, err := goquery.NewDocumentFromReader(resp.Body)
+	if ct := resp.Header.Get("Content-Type"); !strings.Contains(ct, "text/html") {
+		return 0, fmt.Errorf("fetch %s: unexpected content-type %q", url, ct)
+	}
+
+	doc, err := goquery.NewDocumentFromReader(io.LimitReader(resp.Body, 10<<20))
 	if err != nil {
 		return 0, fmt.Errorf("parse html %s: %w", url, err)
 	}
@@ -65,7 +70,7 @@ func (s *HTMLScraper) FetchPrice(ctx context.Context, url, selector string) (flo
 }
 
 type ldOffer struct {
-	Price interface{} `json:"price"`
+	Price any `json:"price"`
 }
 
 type ldProduct struct {
@@ -100,7 +105,7 @@ func extractJSONLD(doc *goquery.Document) (float64, bool) {
 }
 
 // parsePrice converts a localized price string to float64.
-// Handles EU format ("1.299,99") and US format ("1,299.99").
+// Handles EU format ("1.299,99" or "1.299") and US format ("1,299.99").
 func parsePrice(s string) (float64, error) {
 	s = strings.TrimSpace(s)
 
@@ -109,13 +114,21 @@ func parsePrice(s string) (float64, error) {
 
 	var normalized string
 	switch {
-	case lastDot > lastComma:
-		// US format: 1,299.99 — strip thousands comma
-		normalized = strings.ReplaceAll(s, ",", "")
 	case lastComma > lastDot:
-		// EU format: 1.299,99 — strip thousands dot, decimal comma → dot
+		// EU decimal: 1.299,99 — thousands dot, decimal comma
 		normalized = strings.ReplaceAll(s, ".", "")
 		normalized = strings.ReplaceAll(normalized, ",", ".")
+	case lastDot > lastComma:
+		// Could be US decimal (1,299.99) or EU thousands-only (1.299).
+		// EU thousands: dot exists, no comma, and fractional part is exactly 3 digits.
+		afterDot := s[lastDot+1:]
+		if lastComma == -1 && len(afterDot) == 3 && !strings.ContainsAny(afterDot, ".,") {
+			// Treat as EU integer with thousands separator: 1.299 → 1299
+			normalized = strings.ReplaceAll(s, ".", "")
+		} else {
+			// US format: strip thousands commas
+			normalized = strings.ReplaceAll(s, ",", "")
+		}
 	default:
 		normalized = s
 	}

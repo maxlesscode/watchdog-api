@@ -1,6 +1,7 @@
 package middleware_test
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -72,10 +73,12 @@ func TestRateLimitMiddleware_AllowsUnderBurst(t *testing.T) {
 	t.Parallel()
 
 	// burst=5, rps tiny — 5 requests should all pass
-	handler := middleware.RateLimitMiddleware(0.001, 5)(http.HandlerFunc(okHandler))
+	handler := middleware.RateLimitMiddleware(context.Background(), 0.001, 5)(http.HandlerFunc(okHandler))
 
 	for i := range 5 {
 		req := httptest.NewRequest(http.MethodGet, "/", nil)
+		// RemoteAddr is loopback (trusted proxy) so XFF is honoured.
+		req.RemoteAddr = "127.0.0.1:12345"
 		req.Header.Set("X-Forwarded-For", "10.0.0.1")
 		w := httptest.NewRecorder()
 		handler.ServeHTTP(w, req)
@@ -89,10 +92,11 @@ func TestRateLimitMiddleware_Blocks429WhenExceeded(t *testing.T) {
 	t.Parallel()
 
 	// burst=1, rps tiny — second request from same IP must be 429
-	handler := middleware.RateLimitMiddleware(0.001, 1)(http.HandlerFunc(okHandler))
+	handler := middleware.RateLimitMiddleware(context.Background(), 0.001, 1)(http.HandlerFunc(okHandler))
 
 	for i, want := range []int{http.StatusOK, http.StatusTooManyRequests} {
 		req := httptest.NewRequest(http.MethodGet, "/", nil)
+		req.RemoteAddr = "127.0.0.1:12345"
 		req.Header.Set("X-Forwarded-For", "10.0.0.2")
 		w := httptest.NewRecorder()
 		handler.ServeHTTP(w, req)
@@ -106,10 +110,11 @@ func TestRateLimitMiddleware_SeparateBucketsPerIP(t *testing.T) {
 	t.Parallel()
 
 	// burst=1 — each IP gets its own bucket, so both first requests should succeed
-	handler := middleware.RateLimitMiddleware(0.001, 1)(http.HandlerFunc(okHandler))
+	handler := middleware.RateLimitMiddleware(context.Background(), 0.001, 1)(http.HandlerFunc(okHandler))
 
 	for _, ip := range []string{"10.0.1.1", "10.0.1.2"} {
 		req := httptest.NewRequest(http.MethodGet, "/", nil)
+		req.RemoteAddr = "127.0.0.1:12345"
 		req.Header.Set("X-Forwarded-For", ip)
 		w := httptest.NewRecorder()
 		handler.ServeHTTP(w, req)

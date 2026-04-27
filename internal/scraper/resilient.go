@@ -79,11 +79,14 @@ func (s *ResilientScraper) FetchPrice(ctx context.Context, rawURL, selector stri
 		lastErr = err
 
 		if attempt < s.cfg.MaxAttempts {
+			t := time.NewTimer(delay)
 			select {
 			case <-ctx.Done():
+				t.Stop()
 				return 0, ctx.Err()
-			case <-time.After(delay):
+			case <-t.C:
 			}
+			t.Stop()
 			delay *= 2
 		}
 	}

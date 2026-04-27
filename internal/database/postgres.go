@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"net/url"
 	"os"
 
 	"github.com/golang-migrate/migrate/v4"
@@ -24,6 +25,7 @@ type Config struct {
 	user     string
 	password string
 	dbname   string
+	sslmode  string
 }
 
 type PostgresStore struct {
@@ -39,12 +41,17 @@ func configDB() Config {
 		log.Println("no .env file, reading from environment")
 	}
 
+	sslmode := os.Getenv("DB_SSL_MODE")
+	if sslmode == "" {
+		sslmode = "require"
+	}
 	cfg := Config{
 		host:     os.Getenv("DB_HOST"),
 		port:     os.Getenv("DB_PORT"),
 		user:     os.Getenv("DB_USER"),
 		password: os.Getenv("DB_PASSWORD"),
 		dbname:   os.Getenv("DB_NAME"),
+		sslmode:  sslmode,
 	}
 
 	if cfg.host == "" || cfg.port == "" || cfg.user == "" || cfg.dbname == "" {
@@ -88,10 +95,15 @@ func MigrateDB(db *sql.DB) error {
 func StartDB() *sql.DB {
 	cfg := configDB()
 
-	sqlInfo := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable",
-		cfg.host, cfg.port, cfg.user, cfg.password, cfg.dbname)
+	dsn := &url.URL{
+		Scheme:   "postgres",
+		User:     url.UserPassword(cfg.user, cfg.password),
+		Host:     cfg.host + ":" + cfg.port,
+		Path:     "/" + cfg.dbname,
+		RawQuery: "sslmode=" + url.QueryEscape(cfg.sslmode),
+	}
 
-	db, err := sql.Open("postgres", sqlInfo)
+	db, err := sql.Open("postgres", dsn.String())
 	if err != nil {
 		log.Fatal("failed to open db: ", err)
 	}

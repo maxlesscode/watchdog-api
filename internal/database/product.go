@@ -2,6 +2,7 @@ package database
 
 import (
 	"context"
+	"database/sql"
 	"time"
 
 	"github.com/maxlesscode/watchdog/internal/models"
@@ -45,7 +46,7 @@ func (s *PostgresStore) GetAllProducts(ctx context.Context) ([]models.Product, e
 	}
 	defer rows.Close()
 
-	var productList []models.Product
+	productList := make([]models.Product, 0)
 	for rows.Next() {
 		var p models.Product
 		if err := rows.Scan(&p.ID, &p.Name, &p.URL, &p.ActualPrice, &p.TargetPrice, &p.PriceSelector, &p.LastCheckedAt, &p.LastAlertedAt); err != nil {
@@ -86,8 +87,18 @@ func (s *PostgresStore) UpdateProduct(ctx context.Context, id int, p models.Prod
 }
 
 func (s *PostgresStore) DeleteProduct(ctx context.Context, id int) error {
-	_, err := s.db.ExecContext(ctx, "DELETE FROM products WHERE id = $1", id)
-	return err
+	res, err := s.db.ExecContext(ctx, "DELETE FROM products WHERE id = $1", id)
+	if err != nil {
+		return err
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if n == 0 {
+		return sql.ErrNoRows
+	}
+	return nil
 }
 
 func (s *PostgresStore) Ping(ctx context.Context) error {
