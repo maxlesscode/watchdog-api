@@ -1,0 +1,59 @@
+name: Test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: test (go-${{ matrix.go }})
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        go: ["1.26"]
+
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_DB: watchdog_test
+          POSTGRES_USER: watchdog
+          POSTGRES_PASSWORD: watchdog
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+        ports:
+          - 5432:5432
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ matrix.go }}
+          cache: true
+
+      - name: Download modules
+        run: go mod download
+
+      - name: Check go.mod / go.sum are tidy
+        run: |
+          go mod tidy
+          git diff --exit-code go.mod go.sum
+
+      - name: Unit tests
+        run: go test -race -shuffle=on -count=1 github.com/maxlesscode/watchdog/internal/...
+
+      - name: Integration tests
+        env:
+          TEST_DB_URL: postgres://watchdog:watchdog@localhost:5432/watchdog_test?sslmode=disable
+        run: go test -race -count=1 -tags integration github.com/maxlesscode/watchdog/internal/database/...
