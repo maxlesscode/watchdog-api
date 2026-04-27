@@ -2,13 +2,21 @@ package database
 
 import (
 	"database/sql"
+	"embed"
+	"errors"
 	"fmt"
 	"log"
 	"os"
 
+	"github.com/golang-migrate/migrate/v4"
+	migratepostgres "github.com/golang-migrate/migrate/v4/database/postgres"
+	"github.com/golang-migrate/migrate/v4/source/iofs"
 	"github.com/joho/godotenv"
 	_ "github.com/lib/pq"
 )
+
+//go:embed migrations/*.sql
+var migrationsFS embed.FS
 
 type Config struct {
 	host     string
@@ -46,6 +54,27 @@ func configDB() Config {
 	return cfg
 }
 
+func runMigrations(db *sql.DB, dbname string) {
+	src, err := iofs.New(migrationsFS, "migrations")
+	if err != nil {
+		log.Fatal("failed to load migration source: ", err)
+	}
+
+	driver, err := migratepostgres.WithInstance(db, &migratepostgres.Config{DatabaseName: dbname})
+	if err != nil {
+		log.Fatal("failed to create migration driver: ", err)
+	}
+
+	m, err := migrate.NewWithInstance("iofs", src, dbname, driver)
+	if err != nil {
+		log.Fatal("failed to init migrator: ", err)
+	}
+
+	if err = m.Up(); err != nil && !errors.Is(err, migrate.ErrNoChange) {
+		log.Fatal("migration failed: ", err)
+	}
+}
+
 func StartDB() *sql.DB {
 	cfg := configDB()
 
@@ -61,56 +90,7 @@ func StartDB() *sql.DB {
 		log.Fatal("database not alive: ", err)
 	}
 
-	_, err = db.Exec(`CREATE TABLE IF NOT EXISTS products (
-		id           SERIAL PRIMARY KEY,
-		name         TEXT NOT NULL,
-		url          TEXT NOT NULL,
-		actual_price NUMERIC,
-		target_price NUMERIC
-	)`)
-	if err != nil {
-		log.Fatal("failed to create products table: ", err)
-	}
-
-	_, err = db.Exec(`ALTER TABLE products ADD COLUMN IF NOT EXISTS price_selector TEXT`)
-	if err != nil {
-		log.Fatal("failed to add price_selector column: ", err)
-	}
-
-	_, err = db.Exec(`ALTER TABLE products ADD COLUMN IF NOT EXISTS last_checked_at TIMESTAMPTZ`)
-	if err != nil {
-		log.Fatal("failed to add last_checked_at column: ", err)
-	}
-
-	_, err = db.Exec(`ALTER TABLE products ADD COLUMN IF NOT EXISTS last_alerted_at TIMESTAMPTZ`)
-	if err != nil {
-		log.Fatal("failed to add last_alerted_at column: ", err)
-	}
-
-	// Ensure products.id has a PRIMARY KEY — may be missing if table was created by an older schema.
-	_, err = db.Exec(`DO $$
-		BEGIN
-			IF NOT EXISTS (
-				SELECT 1 FROM pg_constraint
-				WHERE conrelid = 'products'::regclass AND contype = 'p'
-			) THEN
-				ALTER TABLE products ADD PRIMARY KEY (id);
-			END IF;
-		END;
-	$$`)
-	if err != nil {
-		log.Fatal("failed to ensure products primary key: ", err)
-	}
-
-	_, err = db.Exec(`CREATE TABLE IF NOT EXISTS price_history (
-		id         SERIAL PRIMARY KEY,
-		product_id INTEGER NOT NULL REFERENCES products(id) ON DELETE CASCADE,
-		price      NUMERIC NOT NULL,
-		checked_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-	)`)
-	if err != nil {
-		log.Fatal("failed to create price_history table: ", err)
-	}
+	runMigrations(db, cfg.dbname)
 
 	return db
 }
