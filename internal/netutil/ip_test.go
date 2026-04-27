@@ -9,54 +9,46 @@ func TestIsPrivateIP(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		ip      string
+		name    string
+		ip      net.IP
 		private bool
 	}{
 		// Private ranges
-		{"10.0.0.1", true},
-		{"10.255.255.255", true},
-		{"172.16.0.1", true},
-		{"172.31.255.255", true},
-		{"192.168.1.1", true},
-		{"192.168.0.0", true},
+		{name: "10.0.0.1", ip: net.ParseIP("10.0.0.1"), private: true},
+		{name: "10.255.255.255", ip: net.ParseIP("10.255.255.255"), private: true},
+		{name: "172.16.0.1", ip: net.ParseIP("172.16.0.1"), private: true},
+		{name: "172.31.255.255", ip: net.ParseIP("172.31.255.255"), private: true},
+		{name: "192.168.1.1", ip: net.ParseIP("192.168.1.1"), private: true},
+		{name: "192.168.0.0", ip: net.ParseIP("192.168.0.0"), private: true},
 		// Loopback
-		{"127.0.0.1", true},
-		{"127.255.255.255", true},
+		{name: "127.0.0.1", ip: net.ParseIP("127.0.0.1"), private: true},
+		{name: "127.255.255.255", ip: net.ParseIP("127.255.255.255"), private: true},
 		// Link-local IPv4 (cloud metadata: 169.254.169.254)
-		{"169.254.0.1", true},
-		{"169.254.169.254", true},
+		{name: "169.254.0.1", ip: net.ParseIP("169.254.0.1"), private: true},
+		{name: "169.254.169.254", ip: net.ParseIP("169.254.169.254"), private: true},
 		// IPv6
-		{"::1", true},
-		{"fe80::1", true},
-		{"fc00::1", true},
-		{"fd00::1", true},
+		{name: "::1", ip: net.ParseIP("::1"), private: true},
+		{name: "fe80::1", ip: net.ParseIP("fe80::1"), private: true},
+		{name: "fc00::1", ip: net.ParseIP("fc00::1"), private: true},
+		{name: "fd00::1", ip: net.ParseIP("fd00::1"), private: true},
 		// Public
-		{"8.8.8.8", false},
-		{"1.1.1.1", false},
-		{"93.184.216.34", false}, // example.com
-		{"2606:2800:220:1:248:1893:25c8:1946", false},
-		// Boundary cases
-		{"172.15.255.255", false}, // just below lower bound of 172.16.0.0/12
-		{"172.32.0.0", false},     // just above upper bound of 172.31.255.255/12
+		{name: "8.8.8.8", ip: net.ParseIP("8.8.8.8"), private: false},
+		{name: "1.1.1.1", ip: net.ParseIP("1.1.1.1"), private: false},
+		{name: "93.184.216.34", ip: net.ParseIP("93.184.216.34"), private: false},
+		{name: "2606:2800:220:1:248:1893:25c8:1946", ip: net.ParseIP("2606:2800:220:1:248:1893:25c8:1946"), private: false},
+		// 172.16.0.0/12 boundaries
+		{name: "172.15.255.255", ip: net.ParseIP("172.15.255.255"), private: false},
+		{name: "172.32.0.0", ip: net.ParseIP("172.32.0.0"), private: false},
+		// Nil is treated as private (fail-safe: unknown address is blocked)
+		{name: "nil", ip: nil, private: true},
 	}
 
 	for _, tt := range tests {
-		t.Run(tt.ip, func(t *testing.T) {
+		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			ip := net.ParseIP(tt.ip)
-			if ip == nil {
-				t.Fatalf("net.ParseIP(%q) returned nil", tt.ip)
-			}
-			if got := IsPrivateIP(ip); got != tt.private {
-				t.Errorf("IsPrivateIP(%s) = %v, want %v", tt.ip, got, tt.private)
+			if got := IsPrivateIP(tt.ip); got != tt.private {
+				t.Errorf("IsPrivateIP(%v) = %v, want %v", tt.ip, got, tt.private)
 			}
 		})
-	}
-}
-
-func TestIsPrivateIP_Nil(t *testing.T) {
-	// A nil IP is not a valid address; treat it as private to fail safe.
-	if got := IsPrivateIP(nil); !got {
-		t.Error("IsPrivateIP(nil) = false, want true")
 	}
 }
