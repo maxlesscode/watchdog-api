@@ -122,12 +122,12 @@ Production-grade reliability.
 Reproducible builds, automated checks.
 
 ### 4.1 — GitHub Actions
-- [ ] Workflow: lint → vet → test (`-race`) → build on every PR (CI-1)
-- [ ] Cache `go mod download`
-- [ ] `golangci-lint run` with project config
+- [x] Workflow: lint → vet → test (`-race`) → build on every PR (CI-1)
+- [x] Cache `go mod download`
+- [x] `golangci-lint run` with project config
 
 ### 4.2 — Makefile targets
-- [ ] `make lint`, `make test`, `make build`, `make docker-up`, `make scrape` (trigger manual cycle)
+- [x] `make lint`, `make test`, `make build`, `make docker-up`, `make scrape` (trigger manual cycle)
 
 ### 4.3 — Docker
 - [ ] Multi-stage `Dockerfile`: builder → minimal runtime image

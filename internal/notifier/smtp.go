@@ -2,7 +2,9 @@ package notifier
 
 import (
 	"context"
+	"crypto/tls"
 	"fmt"
+	"net"
 	"net/smtp"
 	"strings"
 
@@ -49,7 +51,6 @@ func (c SMTPConfig) Validate() error {
 }
 
 // SMTPNotifier sends price-alert emails via SMTP STARTTLS (port 587).
-// Port 465 (implicit TLS) is not supported in this implementation.
 type SMTPNotifier struct {
 	cfg SMTPConfig
 }
@@ -60,39 +61,70 @@ func NewSMTPNotifier(cfg SMTPConfig) *SMTPNotifier {
 }
 
 // Notify sends a price-drop alert email for p.
+// The TCP dial and all subsequent SMTP commands honor ctx — no goroutine is leaked.
 func (n *SMTPNotifier) Notify(ctx context.Context, p models.Product) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
 
 	addr := n.cfg.Host + ":" + n.cfg.Port
-	auth := smtp.PlainAuth("", n.cfg.User, n.cfg.Pass, n.cfg.Host)
+
+	conn, err := (&net.Dialer{}).DialContext(ctx, "tcp", addr)
+	if err != nil {
+		return fmt.Errorf("smtp dial %s: %w", addr, err)
+	}
+
+	// Propagate context deadline to all SMTP I/O so the connection doesn't
+	// outlive cancellation waiting for a slow or non-responsive server.
+	if deadline, ok := ctx.Deadline(); ok {
+		conn.SetDeadline(deadline) //nolint:errcheck
+	}
+
+	c, err := smtp.NewClient(conn, n.cfg.Host)
+	if err != nil {
+		conn.Close()
+		return fmt.Errorf("smtp new client: %w", err)
+	}
+	defer c.Close()
+
+	if err := c.StartTLS(&tls.Config{ServerName: n.cfg.Host}); err != nil {
+		return fmt.Errorf("smtp starttls: %w", err)
+	}
+
+	if err := c.Auth(smtp.PlainAuth("", n.cfg.User, n.cfg.Pass, n.cfg.Host)); err != nil {
+		return fmt.Errorf("smtp auth: %w", err)
+	}
+
+	if err := c.Mail(n.cfg.User); err != nil {
+		return fmt.Errorf("smtp mail from: %w", err)
+	}
+	if err := c.Rcpt(n.cfg.AlertEmail); err != nil {
+		return fmt.Errorf("smtp rcpt to: %w", err)
+	}
+
+	wc, err := c.Data()
+	if err != nil {
+		return fmt.Errorf("smtp data: %w", err)
+	}
 
 	subject := fmt.Sprintf("Price alert: %s is now %.2f", sanitizeHeader(p.Name), p.ActualPrice)
 	body := fmt.Sprintf(
 		"Product:       %s\nURL:           %s\nCurrent price: %.2f\nTarget price:  %.2f",
 		sanitizeHeader(p.Name), sanitizeHeader(p.URL), p.ActualPrice, p.TargetPrice,
 	)
-	msg := []byte(
-		"To: " + n.cfg.AlertEmail + "\r\n" +
-			"From: " + n.cfg.User + "\r\n" +
-			"Subject: " + subject + "\r\n" +
-			"\r\n" +
-			body,
-	)
+	msg := "To: " + n.cfg.AlertEmail + "\r\n" +
+		"From: " + n.cfg.User + "\r\n" +
+		"Subject: " + subject + "\r\n" +
+		"\r\n" +
+		body
 
-	// smtp.SendMail blocks with no ctx support; race it against ctx cancellation.
-	// The spawned goroutine may outlive cancellation until the OS TCP timeout fires.
-	done := make(chan error, 1)
-	go func() { done <- smtp.SendMail(addr, auth, n.cfg.User, []string{n.cfg.AlertEmail}, msg) }()
-
-	select {
-	case <-ctx.Done():
-		return fmt.Errorf("smtp notify cancelled: %w", ctx.Err())
-	case err := <-done:
-		if err != nil {
-			return fmt.Errorf("smtp send to %s: %w", n.cfg.AlertEmail, err)
-		}
-		return nil
+	if _, err = fmt.Fprint(wc, msg); err != nil {
+		wc.Close()
+		return fmt.Errorf("smtp write body: %w", err)
 	}
+	if err := wc.Close(); err != nil {
+		return fmt.Errorf("smtp end data: %w", err)
+	}
+
+	return c.Quit()
 }

@@ -14,6 +14,9 @@ import (
 	"github.com/maxlesscode/watchdog/internal/models"
 )
 
+// compile-time check that mockStore satisfies the full interface
+var _ database.ProductStore = (*mockStore)(nil)
+
 type mockStore struct {
 	getAllProductsFn  func(ctx context.Context) ([]models.Product, error)
 	getProductByIDFn func(ctx context.Context, id int) (models.Product, error)
@@ -21,6 +24,7 @@ type mockStore struct {
 	updateProductFn  func(ctx context.Context, id int, p models.Product) (models.Product, error)
 	deleteProductFn  func(ctx context.Context, id int) error
 	pingFn           func(ctx context.Context) error
+	getPriceHistoryFn func(ctx context.Context, productID int) ([]models.PriceHistory, error)
 }
 
 func (m *mockStore) GetAllProducts(ctx context.Context) ([]models.Product, error) {
@@ -57,6 +61,13 @@ func (m *mockStore) InsertPriceHistory(_ context.Context, _ database.InsertPrice
 
 func (m *mockStore) UpdateLastAlerted(_ context.Context, _ database.UpdateLastAlertedInput) error {
 	return nil
+}
+
+func (m *mockStore) GetPriceHistory(ctx context.Context, productID int) ([]models.PriceHistory, error) {
+	if m.getPriceHistoryFn != nil {
+		return m.getPriceHistoryFn(ctx, productID)
+	}
+	return []models.PriceHistory{}, nil
 }
 
 func TestGetAllProducts(t *testing.T) {
@@ -200,7 +211,7 @@ func TestGetProductByID(t *testing.T) {
 			name:   "not found",
 			pathID: "99",
 			storeFn: func(ctx context.Context, id int) (models.Product, error) {
-				return models.Product{}, sql.ErrNoRows
+				return models.Product{}, database.ErrNotFound
 			},
 			wantStatus: http.StatusNotFound,
 		},
@@ -293,9 +304,9 @@ func TestUpdateProduct(t *testing.T) {
 			env := &Env{DB: &mockStore{updateProductFn: tt.storeFn}}
 
 			mux := http.NewServeMux()
-			mux.HandleFunc("PATCH /products/{id}", env.UpdateProduct)
+			mux.HandleFunc("PUT /products/{id}", env.UpdateProduct)
 
-			req := httptest.NewRequest(http.MethodPatch, "/products/"+tt.pathID, strings.NewReader(tt.body))
+			req := httptest.NewRequest(http.MethodPut, "/products/"+tt.pathID, strings.NewReader(tt.body))
 			req.Header.Set("Content-Type", "application/json")
 			w := httptest.NewRecorder()
 
@@ -401,6 +412,80 @@ func TestHealthCheck(t *testing.T) {
 			}
 			if body["status"] != tt.wantStatus_ {
 				t.Errorf("status field = %q, want %q", body["status"], tt.wantStatus_)
+			}
+		})
+	}
+}
+
+func TestGetPriceHistory(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name       string
+		pathID     string
+		storeFn    func(ctx context.Context, id int) ([]models.PriceHistory, error)
+		wantStatus int
+		wantLen    int
+	}{
+		{
+			name:   "returns history",
+			pathID: "1",
+			storeFn: func(ctx context.Context, id int) ([]models.PriceHistory, error) {
+				return []models.PriceHistory{
+					{ID: 1, ProductID: 1, Price: 9.99},
+					{ID: 2, ProductID: 1, Price: 10.50},
+				}, nil
+			},
+			wantStatus: http.StatusOK,
+			wantLen:    2,
+		},
+		{
+			name:   "product not found",
+			pathID: "99",
+			storeFn: func(ctx context.Context, id int) ([]models.PriceHistory, error) {
+				return nil, database.ErrNotFound
+			},
+			wantStatus: http.StatusNotFound,
+		},
+		{
+			name:       "invalid id",
+			pathID:     "abc",
+			wantStatus: http.StatusBadRequest,
+		},
+		{
+			name:   "db error returns 500",
+			pathID: "1",
+			storeFn: func(ctx context.Context, id int) ([]models.PriceHistory, error) {
+				return nil, sql.ErrConnDone
+			},
+			wantStatus: http.StatusInternalServerError,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			env := &Env{DB: &mockStore{getPriceHistoryFn: tt.storeFn}}
+
+			mux := http.NewServeMux()
+			mux.HandleFunc("GET /products/{id}/history", env.GetPriceHistory)
+
+			req := httptest.NewRequest(http.MethodGet, "/products/"+tt.pathID+"/history", nil)
+			w := httptest.NewRecorder()
+
+			mux.ServeHTTP(w, req)
+
+			if w.Code != tt.wantStatus {
+				t.Errorf("status = %d, want %d", w.Code, tt.wantStatus)
+			}
+			if tt.wantStatus == http.StatusOK {
+				var history []models.PriceHistory
+				if err := json.NewDecoder(w.Body).Decode(&history); err != nil {
+					t.Fatal("decode response:", err)
+				}
+				if len(history) != tt.wantLen {
+					t.Errorf("len = %d, want %d", len(history), tt.wantLen)
+				}
 			}
 		})
 	}

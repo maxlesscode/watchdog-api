@@ -49,6 +49,9 @@ func (m *mockStore) UpdateProduct(_ context.Context, _ int, _ models.Product) (m
 }
 func (m *mockStore) DeleteProduct(_ context.Context, _ int) error { return nil }
 func (m *mockStore) Ping(_ context.Context) error                 { return nil }
+func (m *mockStore) GetPriceHistory(_ context.Context, _ int) ([]models.PriceHistory, error) {
+	return nil, nil
+}
 
 type mockScraper struct {
 	price float64

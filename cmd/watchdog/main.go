@@ -11,10 +11,11 @@ import (
 	"os"
 	"os/signal"
 	"strconv"
+	"strings"
 	"syscall"
 	"time"
 
-	_ "github.com/lib/pq"
+	"github.com/joho/godotenv"
 	"github.com/maxlesscode/watchdog/internal/database"
 	"github.com/maxlesscode/watchdog/internal/handlers"
 	"github.com/maxlesscode/watchdog/internal/logger"
@@ -25,22 +26,53 @@ import (
 	"github.com/maxlesscode/watchdog/internal/scraper"
 )
 
-func main() {
-	isDev := os.Getenv("IS_DEV")
+var version = "dev"
 
-	appLogger, cleanup, err := logger.New("watchdog.log", slog.LevelInfo, isDev)
+func main() {
+	if err := godotenv.Load(); err != nil {
+		log.Println("no .env file, reading from environment")
+	}
+
+	isDev := os.Getenv("IS_DEV") == "true"
+
+	logPath := os.Getenv("LOG_PATH")
+	if logPath == "" {
+		logPath = "watchdog.log"
+	}
+
+	appLogger, cleanup, err := logger.New(logPath, slog.LevelInfo, isDev)
 	if err != nil {
 		log.Fatal("failed to initialize logger: ", err)
 	}
 	defer cleanup()
 	slog.SetDefault(appLogger)
 
-	db := database.StartDB()
-	defer db.Close()
+	slog.Info("starting watchdog", "version", version)
 
 	if os.Getenv("API_KEY") == "" {
-		log.Fatal("API_KEY must be set")
+		slog.Error("API_KEY must be set")
+		os.Exit(1)
 	}
+
+	dbCfg := database.Config{
+		Host:     os.Getenv("DB_HOST"),
+		Port:     os.Getenv("DB_PORT"),
+		User:     os.Getenv("DB_USER"),
+		Password: os.Getenv("DB_PASSWORD"),
+		DBName:   os.Getenv("DB_NAME"),
+		SSLMode:  os.Getenv("DB_SSL_MODE"),
+	}
+	if dbCfg.Host == "" || dbCfg.Port == "" || dbCfg.User == "" || dbCfg.DBName == "" {
+		slog.Error("required DB env vars not set", "required", "DB_HOST, DB_PORT, DB_USER, DB_NAME")
+		os.Exit(1)
+	}
+
+	db, err := database.Connect(dbCfg)
+	if err != nil {
+		slog.Error("database connect failed", "err", err)
+		os.Exit(1)
+	}
+	defer db.Close()
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
@@ -70,17 +102,30 @@ func main() {
 	mux.HandleFunc("GET /products", env.GetAllProducts)
 	mux.HandleFunc("GET /products/{id}", env.GetProductByID)
 	mux.HandleFunc("POST /products", env.CreateProduct)
-	mux.HandleFunc("PATCH /products/{id}", env.UpdateProduct)
+	mux.HandleFunc("PUT /products/{id}", env.UpdateProduct)
 	mux.HandleFunc("DELETE /products/{id}", env.DeleteProduct)
 	mux.HandleFunc("GET /health", env.HealthCheck)
 	mux.HandleFunc("POST /admin/scrape", env.AdminScrape)
+	mux.HandleFunc("GET /products/{id}/history", env.GetPriceHistory)
 
 	rateLimitRPS := envFloat("RATE_LIMIT", 10.0)
 	rateBurst := envInt("RATE_BURST", 20)
 
+	corsOrigins := parseCORSOrigins(os.Getenv("CORS_ORIGINS"))
+
+	addr := os.Getenv("SERVER_ADDR")
+	if addr == "" {
+		addr = ":9999"
+	}
+
 	srv := http.Server{
-		Addr:         ":9999",
-		Handler:      m.CORSMiddleware(m.LoggingMiddleware(m.RateLimitMiddleware(ctx, rateLimitRPS, rateBurst)(m.APIKeyMiddleware(mux)))),
+		Addr: addr,
+		Handler: chain(mux,
+			m.CORSMiddleware(corsOrigins),
+			m.LoggingMiddleware,
+			m.RateLimitMiddleware(ctx, rateLimitRPS, rateBurst),
+			m.APIKeyMiddleware,
+		),
 		ReadTimeout:  5 * time.Second,
 		WriteTimeout: 10 * time.Second,
 		IdleTimeout:  90 * time.Second,
@@ -106,10 +151,18 @@ func main() {
 		}
 	}()
 
-	slog.Info("HTTP Server started")
+	slog.Info("HTTP server started", "addr", addr)
 	if err = srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		slog.Error("server stopped", "err", err)
 	}
+}
+
+// chain applies middlewares in order: the first middleware is outermost (runs first on each request).
+func chain(h http.Handler, middlewares ...func(http.Handler) http.Handler) http.Handler {
+	for i := len(middlewares) - 1; i >= 0; i-- {
+		h = middlewares[i](h)
+	}
+	return h
 }
 
 func buildPprofServer(addr string) *http.Server {
@@ -123,7 +176,12 @@ func buildPprofServer(addr string) *http.Server {
 	mux.HandleFunc("/debug/pprof/symbol", pprof.Symbol)
 	mux.HandleFunc("/debug/pprof/trace", pprof.Trace)
 	mux.Handle("/debug/vars", expvar.Handler())
-	return &http.Server{Addr: addr, Handler: mux}
+	return &http.Server{
+		Addr:        addr,
+		Handler:     mux,
+		ReadTimeout: 30 * time.Second,
+		IdleTimeout: 60 * time.Second,
+	}
 }
 
 // loadNotifier returns an SMTPNotifier if SMTP_HOST is set, nil otherwise.
@@ -140,9 +198,25 @@ func loadNotifier() notifier.Notifier {
 		return nil
 	}
 	if err := cfg.Validate(); err != nil {
-		log.Fatal(err)
+		slog.Error("invalid SMTP config", "err", err)
+		os.Exit(1)
 	}
 	return notifier.NewSMTPNotifier(cfg)
+}
+
+// parseCORSOrigins splits a comma-separated CORS_ORIGINS value into a slice.
+func parseCORSOrigins(raw string) []string {
+	if raw == "" {
+		return nil
+	}
+	parts := strings.Split(raw, ",")
+	out := make([]string, 0, len(parts))
+	for _, p := range parts {
+		if p = strings.TrimSpace(p); p != "" {
+			out = append(out, p)
+		}
+	}
+	return out
 }
 
 func envFloat(key string, def float64) float64 {

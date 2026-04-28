@@ -3,10 +3,14 @@ package database
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"time"
 
 	"github.com/maxlesscode/watchdog/internal/models"
 )
+
+// ErrNotFound is returned when a requested resource does not exist.
+var ErrNotFound = errors.New("not found")
 
 type ProductStore interface {
 	GetAllProducts(ctx context.Context) ([]models.Product, error)
@@ -18,6 +22,7 @@ type ProductStore interface {
 	UpdateActualPrice(ctx context.Context, in UpdateActualPriceInput) error
 	InsertPriceHistory(ctx context.Context, in InsertPriceHistoryInput) error
 	UpdateLastAlerted(ctx context.Context, in UpdateLastAlertedInput) error
+	GetPriceHistory(ctx context.Context, productID int) ([]models.PriceHistory, error)
 }
 
 const selectColumns = "id, name, url, COALESCE(actual_price, 0), target_price, COALESCE(price_selector, ''), last_checked_at, last_alerted_at"
@@ -62,6 +67,9 @@ func (s *PostgresStore) GetProductByID(ctx context.Context, id int) (models.Prod
 	var p models.Product
 	err := s.db.QueryRowContext(ctx, "SELECT "+selectColumns+" FROM products WHERE id = $1", id).
 		Scan(&p.ID, &p.Name, &p.URL, &p.ActualPrice, &p.TargetPrice, &p.PriceSelector, &p.LastCheckedAt, &p.LastAlertedAt)
+	if errors.Is(err, sql.ErrNoRows) {
+		return models.Product{}, ErrNotFound
+	}
 	return p, err
 }
 
@@ -96,7 +104,7 @@ func (s *PostgresStore) DeleteProduct(ctx context.Context, id int) error {
 		return err
 	}
 	if n == 0 {
-		return sql.ErrNoRows
+		return ErrNotFound
 	}
 	return nil
 }
@@ -127,4 +135,30 @@ func (s *PostgresStore) UpdateLastAlerted(ctx context.Context, in UpdateLastAler
 		in.AlertedAt, in.ID,
 	)
 	return err
+}
+
+func (s *PostgresStore) GetPriceHistory(ctx context.Context, productID int) ([]models.PriceHistory, error) {
+	// Verify the product exists before querying history.
+	if _, err := s.GetProductByID(ctx, productID); err != nil {
+		return nil, err
+	}
+
+	rows, err := s.db.QueryContext(ctx,
+		"SELECT id, product_id, price, checked_at FROM price_history WHERE product_id = $1 ORDER BY checked_at DESC LIMIT 200",
+		productID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	history := make([]models.PriceHistory, 0)
+	for rows.Next() {
+		var h models.PriceHistory
+		if err := rows.Scan(&h.ID, &h.ProductID, &h.Price, &h.CheckedAt); err != nil {
+			return history, err
+		}
+		history = append(history, h)
+	}
+	return history, rows.Err()
 }

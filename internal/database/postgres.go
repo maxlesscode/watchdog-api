@@ -5,60 +5,35 @@ import (
 	"embed"
 	"errors"
 	"fmt"
-	"log"
 	"net/url"
-	"os"
 
 	"github.com/golang-migrate/migrate/v4"
 	migratepostgres "github.com/golang-migrate/migrate/v4/database/postgres"
 	"github.com/golang-migrate/migrate/v4/source/iofs"
-	"github.com/joho/godotenv"
 	_ "github.com/lib/pq"
 )
 
 //go:embed migrations/*.sql
 var migrationsFS embed.FS
 
+// Config holds database connection settings. SSLMode defaults to "require" when empty.
 type Config struct {
-	host     string
-	port     string
-	user     string
-	password string
-	dbname   string
-	sslmode  string
+	Host     string
+	Port     string
+	User     string
+	Password string
+	DBName   string
+	SSLMode  string
 }
 
+// PostgresStore wraps a *sql.DB and implements ProductStore.
 type PostgresStore struct {
 	db *sql.DB
 }
 
+// NewPostgresStore returns a PostgresStore backed by db.
 func NewPostgresStore(db *sql.DB) *PostgresStore {
 	return &PostgresStore{db: db}
-}
-
-func configDB() Config {
-	if err := godotenv.Load(); err != nil {
-		log.Println("no .env file, reading from environment")
-	}
-
-	sslmode := os.Getenv("DB_SSL_MODE")
-	if sslmode == "" {
-		sslmode = "require"
-	}
-	cfg := Config{
-		host:     os.Getenv("DB_HOST"),
-		port:     os.Getenv("DB_PORT"),
-		user:     os.Getenv("DB_USER"),
-		password: os.Getenv("DB_PASSWORD"),
-		dbname:   os.Getenv("DB_NAME"),
-		sslmode:  sslmode,
-	}
-
-	if cfg.host == "" || cfg.port == "" || cfg.user == "" || cfg.dbname == "" {
-		log.Fatal("DB_HOST, DB_PORT, DB_USER, DB_NAME must be set")
-	}
-
-	return cfg
 }
 
 func runMigrations(db *sql.DB, dbname string) error {
@@ -92,29 +67,34 @@ func MigrateDB(db *sql.DB) error {
 	return runMigrations(db, dbname)
 }
 
-func StartDB() *sql.DB {
-	cfg := configDB()
+// Connect opens a Postgres connection using cfg, pings it, and runs pending migrations.
+func Connect(cfg Config) (*sql.DB, error) {
+	if cfg.SSLMode == "" {
+		cfg.SSLMode = "require"
+	}
 
 	dsn := &url.URL{
 		Scheme:   "postgres",
-		User:     url.UserPassword(cfg.user, cfg.password),
-		Host:     cfg.host + ":" + cfg.port,
-		Path:     "/" + cfg.dbname,
-		RawQuery: "sslmode=" + url.QueryEscape(cfg.sslmode),
+		User:     url.UserPassword(cfg.User, cfg.Password),
+		Host:     cfg.Host + ":" + cfg.Port,
+		Path:     "/" + cfg.DBName,
+		RawQuery: "sslmode=" + url.QueryEscape(cfg.SSLMode),
 	}
 
 	db, err := sql.Open("postgres", dsn.String())
 	if err != nil {
-		log.Fatal("failed to open db: ", err)
+		return nil, fmt.Errorf("open db: %w", err)
 	}
 
 	if err = db.Ping(); err != nil {
-		log.Fatal("database not alive: ", err)
+		db.Close()
+		return nil, fmt.Errorf("ping db: %w", err)
 	}
 
-	if err = runMigrations(db, cfg.dbname); err != nil {
-		log.Fatal("migration failed: ", err)
+	if err = runMigrations(db, cfg.DBName); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("migrations: %w", err)
 	}
 
-	return db
+	return db, nil
 }

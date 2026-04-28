@@ -52,21 +52,42 @@ func APIKeyMiddleware(next http.Handler) http.Handler {
 	})
 }
 
-// CORSMiddleware adds permissive CORS headers for local dev (Swagger UI).
-// Handles OPTIONS preflight so Swagger UI can reach the API from a different port.
-func CORSMiddleware(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Access-Control-Allow-Origin", "*")
-		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PATCH, DELETE, OPTIONS")
-		w.Header().Set("Access-Control-Allow-Headers", "X-API-Key, Content-Type")
-
-		if r.Method == http.MethodOptions {
-			w.WriteHeader(http.StatusNoContent)
-			return
+// CORSMiddleware returns a middleware that sets CORS headers based on the allowed origins list.
+// Pass "*" as a single entry for wildcard (dev only). An empty list disables CORS headers entirely.
+// For specific origins, the request's Origin header is echoed back only when it matches.
+func CORSMiddleware(origins []string) func(http.Handler) http.Handler {
+	allowed := make(map[string]struct{}, len(origins))
+	wildcard := false
+	for _, o := range origins {
+		if o == "*" {
+			wildcard = true
 		}
+		allowed[o] = struct{}{}
+	}
 
-		next.ServeHTTP(w, r)
-	})
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if wildcard {
+				w.Header().Set("Access-Control-Allow-Origin", "*")
+				w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+				w.Header().Set("Access-Control-Allow-Headers", "X-API-Key, Content-Type")
+			} else if origin := r.Header.Get("Origin"); origin != "" {
+				if _, ok := allowed[origin]; ok {
+					w.Header().Set("Access-Control-Allow-Origin", origin)
+					w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+					w.Header().Set("Access-Control-Allow-Headers", "X-API-Key, Content-Type")
+					w.Header().Add("Vary", "Origin")
+				}
+			}
+
+			if r.Method == http.MethodOptions {
+				w.WriteHeader(http.StatusNoContent)
+				return
+			}
+
+			next.ServeHTTP(w, r)
+		})
+	}
 }
 
 func LoggingMiddleware(next http.Handler) http.Handler {

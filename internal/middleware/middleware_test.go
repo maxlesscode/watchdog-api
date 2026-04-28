@@ -190,7 +190,7 @@ func TestAPIKeyMiddleware(t *testing.T) {
 	}
 }
 
-func TestCORSMiddleware(t *testing.T) {
+func TestCORSMiddleware_Wildcard(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
@@ -214,7 +214,7 @@ func TestCORSMiddleware(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			handler := middleware.CORSMiddleware(http.HandlerFunc(okHandler))
+			handler := middleware.CORSMiddleware([]string{"*"})(http.HandlerFunc(okHandler))
 			req := httptest.NewRequest(tt.method, "/", nil)
 			w := httptest.NewRecorder()
 			handler.ServeHTTP(w, req)
@@ -225,12 +225,58 @@ func TestCORSMiddleware(t *testing.T) {
 			if got := w.Header().Get("Access-Control-Allow-Origin"); got != "*" {
 				t.Errorf("Access-Control-Allow-Origin = %q, want *", got)
 			}
-			if got := w.Header().Get("Access-Control-Allow-Methods"); got != "GET, POST, PATCH, DELETE, OPTIONS" {
-				t.Errorf("Access-Control-Allow-Methods = %q, want %q", got, "GET, POST, PATCH, DELETE, OPTIONS")
+			if got := w.Header().Get("Access-Control-Allow-Methods"); got != "GET, POST, PUT, DELETE, OPTIONS" {
+				t.Errorf("Access-Control-Allow-Methods = %q, want %q", got, "GET, POST, PUT, DELETE, OPTIONS")
 			}
 			if got := w.Header().Get("Access-Control-Allow-Headers"); got != "X-API-Key, Content-Type" {
 				t.Errorf("Access-Control-Allow-Headers = %q, want %q", got, "X-API-Key, Content-Type")
 			}
 		})
+	}
+}
+
+func TestCORSMiddleware_SpecificOrigin(t *testing.T) {
+	t.Parallel()
+
+	const allowed = "https://app.example.com"
+	handler := middleware.CORSMiddleware([]string{allowed})(http.HandlerFunc(okHandler))
+
+	t.Run("matching origin echoed back", func(t *testing.T) {
+		t.Parallel()
+		req := httptest.NewRequest(http.MethodGet, "/", nil)
+		req.Header.Set("Origin", allowed)
+		w := httptest.NewRecorder()
+		handler.ServeHTTP(w, req)
+		if got := w.Header().Get("Access-Control-Allow-Origin"); got != allowed {
+			t.Errorf("Allow-Origin = %q, want %q", got, allowed)
+		}
+		if got := w.Header().Get("Vary"); got != "Origin" {
+			t.Errorf("Vary = %q, want %q", got, "Origin")
+		}
+	})
+
+	t.Run("non-matching origin gets no CORS headers", func(t *testing.T) {
+		t.Parallel()
+		req := httptest.NewRequest(http.MethodGet, "/", nil)
+		req.Header.Set("Origin", "https://evil.example.com")
+		w := httptest.NewRecorder()
+		handler.ServeHTTP(w, req)
+		if got := w.Header().Get("Access-Control-Allow-Origin"); got != "" {
+			t.Errorf("Allow-Origin = %q, want empty", got)
+		}
+	})
+}
+
+func TestCORSMiddleware_NoOrigins(t *testing.T) {
+	t.Parallel()
+
+	handler := middleware.CORSMiddleware(nil)(http.HandlerFunc(okHandler))
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.Header.Set("Origin", "https://anything.example.com")
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+
+	if got := w.Header().Get("Access-Control-Allow-Origin"); got != "" {
+		t.Errorf("Allow-Origin = %q, want empty when no origins configured", got)
 	}
 }
