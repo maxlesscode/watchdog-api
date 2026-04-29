@@ -11,7 +11,7 @@ import (
 
 // AdminScrape triggers one full scrape cycle immediately and returns 202.
 func (e *Env) AdminScrape(w http.ResponseWriter, r *http.Request) {
-	defer r.Body.Close() //nolint:all
+	defer func() { _ = r.Body.Close() }()
 
 	if e.TriggerScrape == nil {
 		errors.SendError(r.Context(), w, errors.ErrorInput{Code: http.StatusServiceUnavailable, Tech: errors.CodeInternalError, Message: "scraper not configured"})

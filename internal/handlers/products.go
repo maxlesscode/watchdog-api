@@ -23,7 +23,7 @@ type Env struct {
 }
 
 func (e *Env) GetAllProducts(w http.ResponseWriter, r *http.Request) {
-	defer r.Body.Close()
+	defer func() { _ = r.Body.Close() }()
 
 	allProducts, err := e.DB.GetAllProducts(r.Context())
 	if err != nil {
@@ -40,7 +40,7 @@ func (e *Env) GetAllProducts(w http.ResponseWriter, r *http.Request) {
 
 func (e *Env) CreateProduct(w http.ResponseWriter, r *http.Request) {
 	r.Body = http.MaxBytesReader(w, r.Body, maxBodyBytes)
-	defer r.Body.Close()
+	defer func() { _ = r.Body.Close() }()
 
 	var newProduct models.Product
 	if err := json.NewDecoder(r.Body).Decode(&newProduct); err != nil {
@@ -71,7 +71,7 @@ func (e *Env) CreateProduct(w http.ResponseWriter, r *http.Request) {
 }
 
 func (e *Env) GetProductByID(w http.ResponseWriter, r *http.Request) {
-	defer r.Body.Close()
+	defer func() { _ = r.Body.Close() }()
 
 	productID, err := strconv.Atoi(r.PathValue("id"))
 	if err != nil {
@@ -99,7 +99,7 @@ func (e *Env) GetProductByID(w http.ResponseWriter, r *http.Request) {
 // UpdateProduct replaces all fields of a product. All fields are required (PUT semantics).
 func (e *Env) UpdateProduct(w http.ResponseWriter, r *http.Request) {
 	r.Body = http.MaxBytesReader(w, r.Body, maxBodyBytes)
-	defer r.Body.Close()
+	defer func() { _ = r.Body.Close() }()
 
 	var updatedProduct models.Product
 	if err := json.NewDecoder(r.Body).Decode(&updatedProduct); err != nil {
@@ -138,7 +138,7 @@ func (e *Env) UpdateProduct(w http.ResponseWriter, r *http.Request) {
 }
 
 func (e *Env) DeleteProduct(w http.ResponseWriter, r *http.Request) {
-	defer r.Body.Close()
+	defer func() { _ = r.Body.Close() }()
 
 	productID, err := strconv.Atoi(r.PathValue("id"))
 	if err != nil {
@@ -161,7 +161,7 @@ func (e *Env) DeleteProduct(w http.ResponseWriter, r *http.Request) {
 
 // GetPriceHistory returns the scrape price history for a product, newest first.
 func (e *Env) GetPriceHistory(w http.ResponseWriter, r *http.Request) {
-	defer r.Body.Close()
+	defer func() { _ = r.Body.Close() }()
 
 	productID, err := strconv.Atoi(r.PathValue("id"))
 	if err != nil {
@@ -187,7 +187,7 @@ func (e *Env) GetPriceHistory(w http.ResponseWriter, r *http.Request) {
 }
 
 func (e *Env) HealthCheck(w http.ResponseWriter, r *http.Request) {
-	defer r.Body.Close()
+	defer func() { _ = r.Body.Close() }()
 
 	ctx, cancel := context.WithTimeout(r.Context(), 1*time.Second)
 	defer cancel()

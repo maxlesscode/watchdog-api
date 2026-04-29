@@ -32,7 +32,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ghcr.io/bearded-nomad/watchdog
+          images: ghcr.io/maxlesscode/watchdog
           tags: |
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}

@@ -38,7 +38,7 @@ func (s *HTMLScraper) FetchPrice(ctx context.Context, url, selector string) (flo
 	if err != nil {
 		return 0, fmt.Errorf("fetch %s: %w", url, err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		return 0, fmt.Errorf("fetch %s: unexpected status %d", url, resp.StatusCode)

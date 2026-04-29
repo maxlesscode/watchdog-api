@@ -22,6 +22,6 @@ func New(logPath string, level slog.Level, dev bool) (*slog.Logger, func(), erro
 		AddSource: level == slog.LevelDebug,
 	}))
 
-	cleanup := func() { logFile.Close() }
+	cleanup := func() { _ = logFile.Close() }
 	return logger, cleanup, nil
 }

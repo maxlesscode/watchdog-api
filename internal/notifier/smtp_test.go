@@ -86,7 +86,7 @@ func TestNotify_ContextAlreadyCancelled(t *testing.T) {
 	if err != nil {
 		t.Fatalf("listen: %v", err)
 	}
-	defer ln.Close()
+	defer func() { _ = ln.Close() }()
 
 	host, port, _ := net.SplitHostPort(ln.Addr().String())
 	n := NewSMTPNotifier(SMTPConfig{

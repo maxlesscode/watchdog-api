@@ -82,10 +82,10 @@ func (n *SMTPNotifier) Notify(ctx context.Context, p models.Product) error {
 
 	c, err := smtp.NewClient(conn, n.cfg.Host)
 	if err != nil {
-		conn.Close()
+		_ = conn.Close()
 		return fmt.Errorf("smtp new client: %w", err)
 	}
-	defer c.Close()
+	defer func() { _ = c.Close() }()
 
 	if err := c.StartTLS(&tls.Config{ServerName: n.cfg.Host}); err != nil {
 		return fmt.Errorf("smtp starttls: %w", err)
@@ -119,7 +119,7 @@ func (n *SMTPNotifier) Notify(ctx context.Context, p models.Product) error {
 		body
 
 	if _, err = fmt.Fprint(wc, msg); err != nil {
-		wc.Close()
+		_ = wc.Close()
 		return fmt.Errorf("smtp write body: %w", err)
 	}
 	if err := wc.Close(); err != nil {
