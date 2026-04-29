@@ -1,7 +1,8 @@
 .env
+data/
 .data/
 repomix-output.xml
 *.log
 CLAUDE.md
-watchdog
+/watchdog
 todo.md

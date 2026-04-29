@@ -25,6 +25,9 @@ services:
       args:
         VERSION: "${APP_VERSION:-dev}"
     env_file: .env
+    environment:
+      DB_HOST: db
+      LOG_PATH: /app/logs/watchdog.log
     ports:
       - "${APP_PORT:-9999}:9999"
     depends_on:

@@ -72,7 +72,7 @@ func main() {
 		slog.Error("database connect failed", "err", err)
 		os.Exit(1)
 	}
-	defer db.Close()
+	defer db.Close() //nolint:all
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
