@@ -31,7 +31,6 @@ type PostgresStore struct {
 	db *sql.DB
 }
 
-// NewPostgresStore returns a PostgresStore backed by db.
 func NewPostgresStore(db *sql.DB) *PostgresStore {
 	return &PostgresStore{db: db}
 }

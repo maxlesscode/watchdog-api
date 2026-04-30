@@ -54,7 +54,14 @@ components:
           type: string
           format: date-time
           readOnly: true
+          nullable: true
           example: "2025-01-01T12:00:00Z"
+        last_alerted_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+          example: "2025-01-01T11:00:00Z"
 
     ProductInput:
       type: object
@@ -94,13 +101,20 @@ components:
                 - RESOURCE_NOT_FOUND
                 - AUTH_REQUIRED
                 - AUTH_INVALID_TOKEN
+                - FORBIDDEN_ACCESS
                 - VALIDATION_FAILED
                 - INVALID_RESOURCE_ID
+                - RESOURCE_ALREADY_EXISTS
                 - DATABASE_ERROR
+                - RATE_LIMIT_EXCEEDED
               example: VALIDATION_FAILED
             message:
               type: string
               example: validation failed
+            request_id:
+              type: string
+              description: Unique request identifier for tracing.
+              example: a1b2c3d4e5f6g7h8
             details:
               type: object
               additionalProperties:
@@ -124,6 +138,26 @@ components:
           type: string
           description: Present only when DB is unreachable.
           example: unreachable
+
+    PriceHistory:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+          example: 42
+        product_id:
+          type: integer
+          readOnly: true
+          example: 1
+        price:
+          type: number
+          format: float
+          example: 92.50
+        checked_at:
+          type: string
+          format: date-time
+          example: "2025-01-01T12:00:00Z"
 
     ScrapeResponse:
       type: object
@@ -165,14 +199,20 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/Product"
-        "500":
-          description: Database error
+        "401":
+          description: Missing or invalid API key
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
-        "401":
-          description: Missing or invalid API key
+        "429":
+          description: Rate limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "500":
+          description: Database error
           content:
             application/json:
               schema:
@@ -200,14 +240,20 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
-        "500":
-          description: Database error
+        "401":
+          description: Missing or invalid API key
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
-        "401":
-          description: Missing or invalid API key
+        "429":
+          description: Rate limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "500":
+          description: Database error
           content:
             application/json:
               schema:
@@ -244,21 +290,27 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
-        "500":
-          description: Database error
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Error"
         "401":
           description: Missing or invalid API key
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+        "429":
+          description: Rate limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "500":
+          description: Database error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
 
-    patch:
-      summary: Update a product
+    put:
+      summary: Update a product (full replace — all fields required)
       tags: [Products]
       requestBody:
         required: true
@@ -275,6 +327,18 @@ paths:
                 $ref: "#/components/schemas/Product"
         "400":
           description: Invalid JSON, invalid ID, or validation failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: Product not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429":
+          description: Rate limit exceeded
           content:
             application/json:
               schema:
@@ -304,6 +368,18 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+        "404":
+          description: Product not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429":
+          description: Rate limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
         "500":
           description: Database error
           content:
@@ -312,6 +388,59 @@ paths:
                 $ref: "#/components/schemas/Error"
         "401":
           description: Missing or invalid API key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /products/{id}/history:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+        example: 1
+
+    get:
+      summary: Get price history for a product
+      description: Returns all recorded price snapshots for the given product, newest first.
+      tags: [Products]
+      responses:
+        "200":
+          description: Array of price snapshots (empty array if none)
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PriceHistory"
+        "400":
+          description: ID is not a valid integer
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: Product not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: Missing or invalid API key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429":
+          description: Rate limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "500":
+          description: Database error
           content:
             application/json:
               schema:
@@ -331,6 +460,12 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ScrapeResponse"
+        "429":
+          description: Rate limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
         "503":
           description: Scraper not configured
           content:

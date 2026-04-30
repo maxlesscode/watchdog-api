@@ -44,6 +44,7 @@ Server starts on `:9999`. Adminer UI at `http://localhost:8080`. Swagger UI at `
 | `DB_USER` | yes | — | Postgres user |
 | `DB_PASSWORD` | no | — | Postgres password |
 | `DB_NAME` | yes | — | Postgres database name |
+| `DB_SSL_MODE` | no | `disable` | Postgres SSL mode (`disable`, `require`, `verify-full`) |
 | `API_KEY` | yes | — | Secret key for `X-API-Key` header |
 | `SMTP_HOST` | no | — | SMTP server host (enables email alerts) |
 | `SMTP_PORT` | no | — | SMTP port (587 for STARTTLS) |
@@ -51,6 +52,11 @@ Server starts on `:9999`. Adminer UI at `http://localhost:8080`. Swagger UI at `
 | `SMTP_PASS` | no | — | SMTP login password |
 | `ALERT_EMAIL` | no | — | Recipient address for price alerts |
 | `IS_DEV` | no | — | Any non-empty value enables stdout logging |
+| `LOG_PATH` | no | `watchdog.log` | Log file path (`logs/watchdog.log` when running via Docker) |
+| `SERVER_ADDR` | no | `:9999` | HTTP listen address |
+| `CORS_ORIGINS` | no | — | Allowed CORS origins, comma-separated (`*` for wildcard — dev only) |
+| `APP_VERSION` | no | `dev` | Docker image version tag |
+| `APP_PORT` | no | `9999` | Host port binding for Docker |
 
 Email alerts are disabled when `SMTP_HOST` is unset. If `SMTP_HOST` is set, all five SMTP variables are required — the server will refuse to start if any are missing.
 
@@ -67,10 +73,11 @@ All endpoints except `GET /health` require the `X-API-Key` header.
 | `GET` | `/products` | List all tracked products |
 | `GET` | `/products/{id}` | Get product by ID |
 | `POST` | `/products` | Add a new product |
-| `PATCH` | `/products/{id}` | Update a product |
+| `PUT` | `/products/{id}` | Full-replace a product (all fields required) |
 | `DELETE` | `/products/{id}` | Remove a product |
+| `GET` | `/products/{id}/history` | Price history for a product (newest first) |
 
-**POST / PATCH body:**
+**POST / PUT body:**
 
 ```json
 {
@@ -127,8 +134,10 @@ internal/
   errors/           SendError helper, error codes
   handlers/         HTTP handlers (Env struct)
   logger/           slog dual-writer (file + optional stdout)
-  middleware/        APIKeyMiddleware, LoggingMiddleware
+  metrics/          expvar counters (scrape_total, scrape_errors, alerts_sent)
+  middleware/       APIKeyMiddleware, LoggingMiddleware
   models/           Product, PriceHistory structs
+  netutil/          IsPrivateIP — SSRF guard for outbound scrape requests
   notifier/         Notifier interface, SMTPNotifier
   scheduler/        Hourly price-fetch loop
   scraper/          Scraper interface, HTMLScraper

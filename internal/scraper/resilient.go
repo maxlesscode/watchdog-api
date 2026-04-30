@@ -49,7 +49,6 @@ type ResilientScraper struct {
 	states map[string]*circuitState
 }
 
-// NewResilientScraper returns a ResilientScraper wrapping inner.
 func NewResilientScraper(inner Scraper, cfg ResilientConfig) *ResilientScraper {
 	cfg.setDefaults()
 	return &ResilientScraper{
@@ -59,7 +58,7 @@ func NewResilientScraper(inner Scraper, cfg ResilientConfig) *ResilientScraper {
 	}
 }
 
-// FetchPrice implements Scraper with retries and circuit breaking.
+// FetchPrice implements [Scraper].
 func (s *ResilientScraper) FetchPrice(ctx context.Context, rawURL, selector string) (float64, error) {
 	domain := extractDomain(rawURL)
 

@@ -34,6 +34,7 @@ func (rw *responseWriter) Flush() {
 	}
 }
 
+// APIKeyMiddleware rejects requests missing a valid X-API-Key header. /health is exempted.
 func APIKeyMiddleware(next http.Handler) http.Handler {
 	apiKey := os.Getenv("API_KEY")
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -90,6 +91,7 @@ func CORSMiddleware(origins []string) func(http.Handler) http.Handler {
 	}
 }
 
+// LoggingMiddleware logs each request's method, path, status, and duration. It also generates and propagates a request ID.
 func LoggingMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()

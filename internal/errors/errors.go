@@ -39,6 +39,7 @@ const (
 	CodeRateLimitExceeded  = "RATE_LIMIT_EXCEEDED"
 )
 
+// APIError is the JSON shape returned in all error responses.
 type APIError struct {
 	Message   string            `json:"message"`
 	Code      string            `json:"code"`
@@ -54,6 +55,7 @@ type ErrorInput struct {
 	Details map[string]string
 }
 
+// SendError writes a JSON error response with the given HTTP status, tech code, and optional field-level details.
 func SendError(ctx context.Context, w http.ResponseWriter, in ErrorInput) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(in.Code)

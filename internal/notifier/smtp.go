@@ -55,7 +55,6 @@ type SMTPNotifier struct {
 	cfg SMTPConfig
 }
 
-// NewSMTPNotifier returns an SMTPNotifier configured with cfg.
 func NewSMTPNotifier(cfg SMTPConfig) *SMTPNotifier {
 	return &SMTPNotifier{cfg: cfg}
 }

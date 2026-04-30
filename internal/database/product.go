@@ -12,6 +12,7 @@ import (
 // ErrNotFound is returned when a requested resource does not exist.
 var ErrNotFound = errors.New("not found")
 
+// ProductStore is the persistence interface for product and price data.
 type ProductStore interface {
 	GetAllProducts(ctx context.Context) ([]models.Product, error)
 	GetProductByID(ctx context.Context, id int) (models.Product, error)
@@ -138,7 +139,7 @@ func (s *PostgresStore) UpdateLastAlerted(ctx context.Context, in UpdateLastAler
 }
 
 func (s *PostgresStore) GetPriceHistory(ctx context.Context, productID int) ([]models.PriceHistory, error) {
-	// Verify the product exists before querying history.
+	// Ensures unknown product IDs return ErrNotFound rather than an empty slice.
 	if _, err := s.GetProductByID(ctx, productID); err != nil {
 		return nil, err
 	}

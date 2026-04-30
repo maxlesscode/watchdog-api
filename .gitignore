@@ -3,6 +3,10 @@ data/
 .data/
 repomix-output.xml
 *.log
+logs/
 CLAUDE.md
 /watchdog
+/bin/
+graphify-out/
 todo.md
+project.md

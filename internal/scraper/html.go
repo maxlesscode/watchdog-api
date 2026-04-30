@@ -20,7 +20,6 @@ type HTMLScraper struct {
 	client *http.Client
 }
 
-// NewHTMLScraper returns an HTMLScraper using the provided HTTP client.
 func NewHTMLScraper(client *http.Client) *HTMLScraper {
 	return &HTMLScraper{client: client}
 }

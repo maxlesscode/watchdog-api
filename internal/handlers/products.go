@@ -17,11 +17,13 @@ import (
 
 const maxBodyBytes = 1 << 20 // 1 MB
 
+// Env holds handler dependencies injected at startup.
 type Env struct {
 	DB            database.ProductStore
 	TriggerScrape func(ctx context.Context)
 }
 
+// GetAllProducts returns all tracked products as a JSON array.
 func (e *Env) GetAllProducts(w http.ResponseWriter, r *http.Request) {
 	defer func() { _ = r.Body.Close() }()
 
@@ -38,6 +40,7 @@ func (e *Env) GetAllProducts(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// CreateProduct validates and persists a new product, returning 201 with the created record.
 func (e *Env) CreateProduct(w http.ResponseWriter, r *http.Request) {
 	r.Body = http.MaxBytesReader(w, r.Body, maxBodyBytes)
 	defer func() { _ = r.Body.Close() }()
@@ -70,6 +73,7 @@ func (e *Env) CreateProduct(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// GetProductByID returns a single product by its path ID, or 404 if not found.
 func (e *Env) GetProductByID(w http.ResponseWriter, r *http.Request) {
 	defer func() { _ = r.Body.Close() }()
 
@@ -137,6 +141,7 @@ func (e *Env) UpdateProduct(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// DeleteProduct removes a product by ID, returning 204 on success or 404 if not found.
 func (e *Env) DeleteProduct(w http.ResponseWriter, r *http.Request) {
 	defer func() { _ = r.Body.Close() }()
 
@@ -186,6 +191,7 @@ func (e *Env) GetPriceHistory(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// HealthCheck returns 200/503 based on DB reachability, with status in the JSON body.
 func (e *Env) HealthCheck(w http.ResponseWriter, r *http.Request) {
 	defer func() { _ = r.Body.Close() }()
 

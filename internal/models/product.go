@@ -2,6 +2,7 @@ package models
 
 import "time"
 
+// Product represents a tracked item with a target price to watch.
 type Product struct {
 	ID            int        `json:"id"`
 	Name          string     `json:"name"`

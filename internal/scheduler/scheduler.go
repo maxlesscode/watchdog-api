@@ -58,7 +58,7 @@ func New(cfg Config) *Scheduler {
 	}
 }
 
-// Run starts the hourly ticker loop. Blocks until ctx is cancelled.
+// Run starts the price-check loop at s.interval cadence. Blocks until ctx is cancelled.
 func (s *Scheduler) Run(ctx context.Context) {
 	slog.Info("scheduler started", "interval", s.interval)
 	ticker := time.NewTicker(s.interval)
